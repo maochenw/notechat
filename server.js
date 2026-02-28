@@ -13,6 +13,10 @@ const io = new Server(server);
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 const STICKERS_DIR = path.join(__dirname, "stickers");
 
+// Ensure directories exist
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+fs.mkdirSync(STICKERS_DIR, { recursive: true });
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: UPLOADS_DIR,
@@ -208,6 +212,6 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
