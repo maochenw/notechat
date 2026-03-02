@@ -504,7 +504,6 @@
         font-size: 1.05rem;
       }
     }
-    }
   </style>
 </head>
 <body>
@@ -667,13 +666,11 @@
           div.classList.add("sticker-msg");
           div.innerHTML =
             `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>` +
-            `<img class="sticker-img" src="${msg.stickerUrl}" alt="sticker">` +
-            `<div class="time">${formatTime(msg.timestamp)}</div>`;
+            `<img class="sticker-img" src="${msg.stickerUrl}" alt="sticker">`;
         } else {
           let content = `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>`;
           if (msg.text) content += `<div>${escapeHtml(msg.text)}</div>`;
           content += renderMedia(msg);
-          content += `<div class="time">${formatTime(msg.timestamp)}</div>`;
           div.innerHTML = content;
         }
       }
@@ -859,7 +856,7 @@
       stickerGridLanding.innerHTML = list.map((s) =>
         `<div class="sticker-thumb" data-id="${s.id}">
           <img src="${s.url}" alt="sticker">
-          <button class="remove-sticker" title="Remove">&times;</button>
+          ${s.builtin ? '' : '<button class="remove-sticker" title="Remove">&times;</button>'}
         </div>`
       ).join("");
 
