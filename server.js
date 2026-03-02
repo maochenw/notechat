@@ -60,7 +60,7 @@ const stickerUpload = multer({
 
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/uploads", express.static(UPLOADS_DIR));
-app.use("/stickers", express.static(STICKERS_DIR));
+app.use("/uploaded-stickers", express.static(STICKERS_DIR));
 
 // File upload endpoint
 app.post("/upload", upload.single("file"), (req, res) => {
@@ -72,13 +72,37 @@ app.post("/upload", upload.single("file"), (req, res) => {
   res.json({ url: fileUrl, mediaType });
 });
 
-// Sticker upload endpoint — load existing stickers from disk on startup
-const stickers = fs.readdirSync(STICKERS_DIR)
+// Built-in stickers from public/sticker/ and public/stickers/
+const BUILTIN_STICKER_DIRS = [
+  { dir: path.join(__dirname, "public", "sticker"), urlPrefix: "/sticker" },
+  { dir: path.join(__dirname, "public", "stickers"), urlPrefix: "/stickers" },
+];
+
+const builtinStickers = [];
+for (const { dir, urlPrefix } of BUILTIN_STICKER_DIRS) {
+  if (fs.existsSync(dir)) {
+    for (const f of fs.readdirSync(dir)) {
+      if (/\.(png|jpe?g|gif|webp)$/i.test(f)) {
+        builtinStickers.push({
+          id: `builtin-${urlPrefix.slice(1)}-${path.basename(f, path.extname(f))}`,
+          url: `${urlPrefix}/${f}`,
+          builtin: true,
+        });
+      }
+    }
+  }
+}
+
+// User-uploaded stickers from disk on startup
+const userStickers = fs.readdirSync(STICKERS_DIR)
   .filter((f) => f.endsWith(".png"))
   .map((f) => ({
     id: path.basename(f, ".png"),
-    url: `/stickers/${f}`,
+    url: `/uploaded-stickers/${f}`,
   }));
+
+// Combined list: built-in first, then user-uploaded
+const stickers = [...builtinStickers, ...userStickers];
 
 app.post("/upload-sticker", stickerUpload.single("sticker"), (req, res) => {
   if (!req.file) {
@@ -86,7 +110,7 @@ app.post("/upload-sticker", stickerUpload.single("sticker"), (req, res) => {
   }
   const sticker = {
     id: path.basename(req.file.filename, ".png"),
-    url: `/stickers/${req.file.filename}`,
+    url: `/uploaded-stickers/${req.file.filename}`,
   };
   stickers.push(sticker);
   io.emit("stickers", stickers);
@@ -135,9 +159,9 @@ io.on("connection", (socket) => {
 
   socket.on("remove-sticker", ({ id }) => {
     const idx = stickers.findIndex((s) => s.id === id);
-    if (idx !== -1) {
+    if (idx !== -1 && !stickers[idx].builtin) {
       const removed = stickers.splice(idx, 1)[0];
-      const filePath = path.join(__dirname, removed.url);
+      const filePath = path.join(STICKERS_DIR, path.basename(removed.url));
       fs.unlink(filePath, () => {});
       io.emit("stickers", stickers);
     }
@@ -211,7 +235,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
