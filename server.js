@@ -10,12 +10,45 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+const ACCESS_CODE = process.env.ACCESS_CODE || "longtimenosee";
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 const STICKERS_DIR = path.join(__dirname, "stickers");
+const PUBLIC_DIR = path.join(__dirname, "public");
+const ACCESS_PAGE = path.join(PUBLIC_DIR, "access.html");
+const APP_PAGE = path.join(PUBLIC_DIR, "index.html");
+
+const tabSessions = new Map();
 
 // Ensure directories exist
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 fs.mkdirSync(STICKERS_DIR, { recursive: true });
+
+app.use(express.urlencoded({ extended: false }));
+
+function createTabSession() {
+  const tabToken = crypto.randomUUID();
+  tabSessions.set(tabToken, { authorized: true, createdAt: Date.now() });
+  return tabToken;
+}
+
+function getTabToken(req) {
+  const headerToken = `${req.headers["x-tab-token"] || ""}`.trim();
+  if (headerToken) return headerToken;
+  return `${req.query.tab || ""}`.trim();
+}
+
+function getTabSession(req) {
+  const tabToken = getTabToken(req);
+  if (!tabToken) return null;
+  return tabSessions.get(tabToken) || null;
+}
+
+function requireAccess(req, res, next) {
+  if (getTabSession(req)?.authorized) {
+    return next();
+  }
+  return res.status(403).json({ error: "Access denied" });
+}
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -58,12 +91,53 @@ const stickerUpload = multer({
   },
 });
 
-app.use(express.static(path.join(__dirname, "public")));
-app.use("/uploads", express.static(UPLOADS_DIR));
-app.use("/uploaded-stickers", express.static(STICKERS_DIR));
+app.get("/access", (req, res) => {
+  return res.sendFile(ACCESS_PAGE);
+});
+
+app.get("/", (_req, res) => {
+  return res.sendFile(ACCESS_PAGE);
+});
+
+app.post("/access", (req, res) => {
+  const submittedCode = `${req.body.code || ""}`.trim();
+  if (submittedCode !== ACCESS_CODE) {
+    return res.redirect("/access?error=1");
+  }
+
+  const tabToken = createTabSession();
+  return res.redirect("/app");
+});
+
+app.post("/access-token", (req, res) => {
+  const submittedCode = `${req.body.code || ""}`.trim();
+  if (submittedCode !== ACCESS_CODE) {
+    return res.status(401).json({ error: "Invalid access code" });
+  }
+
+  const tabToken = createTabSession();
+  return res.json({ tabToken });
+});
+
+app.post("/logout", (req, res) => {
+  const tabToken = getTabToken(req);
+  if (tabToken) {
+    tabSessions.delete(tabToken);
+  }
+  return res.status(204).end();
+});
+
+app.get("/app", (_req, res) => {
+  res.sendFile(APP_PAGE);
+});
+
+app.use("/sticker", requireAccess, express.static(path.join(PUBLIC_DIR, "sticker")));
+app.use("/stickers", requireAccess, express.static(path.join(PUBLIC_DIR, "stickers")));
+app.use("/uploads", requireAccess, express.static(UPLOADS_DIR));
+app.use("/uploaded-stickers", requireAccess, express.static(STICKERS_DIR));
 
 // File upload endpoint
-app.post("/upload", upload.single("file"), (req, res) => {
+app.post("/upload", requireAccess, upload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
@@ -104,7 +178,7 @@ const userStickers = fs.readdirSync(STICKERS_DIR)
 // Combined list: built-in first, then user-uploaded
 const stickers = [...builtinStickers, ...userStickers];
 
-app.post("/upload-sticker", stickerUpload.single("sticker"), (req, res) => {
+app.post("/upload-sticker", requireAccess, stickerUpload.single("sticker"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
@@ -134,6 +208,17 @@ function cleanupRoomFiles(room) {
     }
   }
 }
+
+io.use((socket, next) => {
+  const tabToken = `${socket.handshake.auth?.tab || ""}`.trim();
+  const session = tabToken ? tabSessions.get(tabToken) : null;
+
+  if (!session?.authorized) {
+    return next(new Error("unauthorized"));
+  }
+
+  return next();
+});
 
 io.on("connection", (socket) => {
   let currentRoom = null;
