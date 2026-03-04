@@ -589,7 +589,24 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    const TAB_STORAGE_KEY = "notechat_tab_token";
+    const tabToken = sessionStorage.getItem(TAB_STORAGE_KEY);
+
+    if (!tabToken) {
+      window.location.replace("/access");
+      throw new Error("Missing tab token");
+    }
+
+    function withTab(url) {
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}tab=${encodeURIComponent(tabToken)}`;
+    }
+
+    const authHeaders = { "x-tab-token": tabToken };
+
+    const socket = io({
+      auth: { tab: tabToken },
+    });
 
     const joinScreen   = document.getElementById("join-screen");
     const chatScreen   = document.getElementById("chat-screen");
@@ -637,9 +654,10 @@
     function renderMedia(msg) {
       if (!msg.fileUrl) return "";
       if (msg.mediaType === "video") {
-        return `<video src="${msg.fileUrl}" controls playsinline></video>`;
+        return `<video src="${withTab(msg.fileUrl)}" controls playsinline></video>`;
       }
-      return `<img src="${msg.fileUrl}" alt="shared image" onclick="openLightbox('${msg.fileUrl}')">`;
+      const mediaUrl = withTab(msg.fileUrl);
+      return `<img src="${mediaUrl}" alt="shared image" onclick="openLightbox('${mediaUrl}')">`;
     }
 
     function openLightbox(src) {
@@ -663,10 +681,11 @@
         div.classList.add(isSelf ? "self" : "other");
 
         if (msg.stickerUrl) {
+          const stickerUrl = withTab(msg.stickerUrl);
           div.classList.add("sticker-msg");
           div.innerHTML =
             `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>` +
-            `<img class="sticker-img" src="${msg.stickerUrl}" alt="sticker">`;
+            `<img class="sticker-img" src="${stickerUrl}" alt="sticker">`;
         } else {
           let content = `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>`;
           if (msg.text) content += `<div>${escapeHtml(msg.text)}</div>`;
@@ -698,7 +717,13 @@
     roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
     nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") roomInput.focus(); });
 
-    leaveBtn.addEventListener("click", () => { location.reload(); });
+    leaveBtn.addEventListener("click", () => {
+      fetch("/logout", { method: "POST", keepalive: true, headers: authHeaders })
+        .finally(() => {
+          sessionStorage.removeItem(TAB_STORAGE_KEY);
+          window.location.replace("/access");
+        });
+    });
 
     // ── File attachment ──
     attachBtn.addEventListener("click", () => fileInput.click());
@@ -747,7 +772,7 @@
         formData.append("file", pendingFile);
 
         try {
-          const res = await fetch("/upload", { method: "POST", body: formData });
+          const res = await fetch("/upload", { method: "POST", body: formData, headers: authHeaders });
           if (!res.ok) throw new Error("Upload failed");
           const data = await res.json();
           fileUrl = data.url;
@@ -838,7 +863,7 @@
           const formData = new FormData();
           formData.append("sticker", blob, "sticker.png");
           try {
-            const res = await fetch("/upload-sticker", { method: "POST", body: formData });
+            const res = await fetch("/upload-sticker", { method: "POST", body: formData, headers: authHeaders });
             if (!res.ok) throw new Error("Upload failed");
           } catch (err) {
             alert("Failed to upload sticker.");
@@ -855,7 +880,7 @@
       }
       stickerGridLanding.innerHTML = list.map((s) =>
         `<div class="sticker-thumb" data-id="${s.id}">
-          <img src="${s.url}" alt="sticker">
+          <img src="${withTab(s.url)}" alt="sticker">
           ${s.builtin ? '' : '<button class="remove-sticker" title="Remove">&times;</button>'}
         </div>`
       ).join("");
@@ -875,7 +900,7 @@
         return;
       }
       stickerPickerGrid.innerHTML = list.map((s) =>
-        `<img class="sticker-pick" src="${s.url}" data-url="${s.url}" alt="sticker">`
+        `<img class="sticker-pick" src="${withTab(s.url)}" data-url="${s.url}" alt="sticker">`
       ).join("");
 
       stickerPickerGrid.querySelectorAll(".sticker-pick").forEach((img) => {
