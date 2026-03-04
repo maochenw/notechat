@@ -224,6 +224,7 @@ io.use((socket, next) => {
 io.on("connection", (socket) => {
   let currentRoom = null;
   let username = null;
+  const clientId = `${socket.handshake.auth?.tab || socket.id}`;
 
   // Send current state on connect
   socket.emit("scheduled-rooms", scheduledRooms);
@@ -280,11 +281,50 @@ io.on("connection", (socket) => {
     io.to(room).emit("user-count", count);
   });
 
+  socket.on("update-name", ({ name }) => {
+    const nextName = `${name || ""}`.trim().slice(0, 30);
+    if (!currentRoom || !username || !nextName || nextName === username) return;
+
+    const previousName = username;
+    username = nextName;
+    socket.emit("name-updated", username);
+
+    if (rooms.has(currentRoom)) {
+      for (const msg of rooms.get(currentRoom)) {
+        if (msg.type === "user" && msg.userId === clientId) {
+          msg.name = username;
+        }
+      }
+    }
+
+    io.to(currentRoom).emit("name-changed", { userId: clientId, name: username });
+
+    const renameMsg = {
+      type: "system",
+      text: `${previousName} is now known as ${username}`,
+      timestamp: Date.now(),
+    };
+
+    if (rooms.has(currentRoom)) {
+      rooms.get(currentRoom).push(renameMsg);
+    }
+    io.to(currentRoom).emit("message", renameMsg);
+  });
+
+  socket.on("clear-room", () => {
+    if (!currentRoom || !rooms.has(currentRoom)) return;
+
+    cleanupRoomFiles(currentRoom);
+    rooms.set(currentRoom, []);
+    io.to(currentRoom).emit("room-cleared");
+  });
+
   socket.on("send-message", (data) => {
     if (!currentRoom || !username) return;
 
     const msg = {
       type: "user",
+      userId: clientId,
       name: username,
       text: data.text || "",
       fileUrl: data.fileUrl || null,

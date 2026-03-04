@@ -237,10 +237,14 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: .75rem;
       padding: .75rem 1rem;
       background: #1e293b;
       border-bottom: 1px solid #334155;
       flex-shrink: 0;
+    }
+    .chat-header .header-meta {
+      min-width: 0;
     }
     .chat-header .room-label {
       font-weight: 700;
@@ -249,6 +253,17 @@
     .chat-header .user-count {
       font-size: .85rem;
       color: #94a3b8;
+    }
+    .chat-header .header-actions {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-shrink: 0;
+    }
+    .chat-header .name-controls {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
     }
     .chat-header button {
       background: none;
@@ -259,7 +274,17 @@
       cursor: pointer;
       font-size: .85rem;
     }
+    .chat-header .name-input {
+      width: 130px;
+      margin: 0;
+      padding: .45rem .6rem;
+      font-size: .85rem;
+    }
     .chat-header button:hover { color: #f8fafc; border-color: #94a3b8; }
+    .chat-header .clear-btn:hover {
+      color: #fecaca;
+      border-color: #ef4444;
+    }
 
     #messages {
       flex: 1;
@@ -322,8 +347,8 @@
     .msg.sticker-msg .time { color: #64748b; }
 
     .msg .sticker-img {
-      width: 80px;
-      height: 80px;
+      width: 120px;
+      height: 120px;
       border-radius: 8px;
       object-fit: cover;
     }
@@ -545,11 +570,18 @@
   <!-- Chat Screen -->
   <div id="chat-screen">
     <div class="chat-header">
-      <div>
+      <div class="header-meta">
         <span class="room-label" id="room-label"></span>
         <span class="user-count" id="user-count"></span>
       </div>
-      <button id="leave-btn">Leave</button>
+      <div class="header-actions">
+        <div class="name-controls">
+          <input id="display-name-input" class="form-input name-input" type="text" maxlength="30" placeholder="Display name">
+          <button id="update-name-btn" title="Update display name">Update</button>
+        </div>
+        <button id="clear-room-btn" class="clear-btn" title="Clear all messages in this room">Clear</button>
+        <button id="leave-btn">Leave</button>
+      </div>
     </div>
     <div id="messages"></div>
     <div class="sticker-picker" id="sticker-picker">
@@ -614,6 +646,9 @@
     const roomInput    = document.getElementById("room-input");
     const joinBtn      = document.getElementById("join-btn");
     const leaveBtn     = document.getElementById("leave-btn");
+    const clearRoomBtn = document.getElementById("clear-room-btn");
+    const displayNameInput = document.getElementById("display-name-input");
+    const updateNameBtn = document.getElementById("update-name-btn");
     const roomLabel    = document.getElementById("room-label");
     const userCount    = document.getElementById("user-count");
     const messagesEl   = document.getElementById("messages");
@@ -640,6 +675,7 @@
     const stickerPickerGrid = document.getElementById("sticker-picker-grid");
 
     let myName = "";
+    let currentRoomId = "";
     let pendingFile = null;
     let currentStickers = [];
 
@@ -677,8 +713,11 @@
         div.classList.add("system");
         div.textContent = msg.text;
       } else {
-        const isSelf = msg.name === myName;
+        const isSelf = msg.userId ? msg.userId === tabToken : false;
         div.classList.add(isSelf ? "self" : "other");
+        if (msg.userId) {
+          div.dataset.userId = msg.userId;
+        }
 
         if (msg.stickerUrl) {
           const stickerUrl = withTab(msg.stickerUrl);
@@ -698,12 +737,39 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function updateRenderedDisplayName(userId, name) {
+      if (!userId || !name) return;
+
+      messagesEl.querySelectorAll(`.msg[data-user-id="${userId}"] .author`).forEach((authorEl) => {
+        authorEl.textContent = userId === tabToken ? "You" : name;
+      });
+    }
+
+    function syncDisplayName(name) {
+      myName = name;
+      nameInput.value = name;
+      displayNameInput.value = name;
+    }
+
+    function submitDisplayNameChange() {
+      const trimmed = displayNameInput.value.trim().slice(0, 30);
+      if (!trimmed) {
+        displayNameInput.value = myName;
+        return;
+      }
+      if (trimmed === myName) return;
+
+      syncDisplayName(trimmed);
+      socket.emit("update-name", { name: trimmed });
+    }
+
     function joinRoom() {
-      const name = nameInput.value.trim();
+      const name = nameInput.value.trim().slice(0, 30);
       const room = roomInput.value.trim();
       if (!name || !room) return;
 
-      myName = name;
+      syncDisplayName(name);
+      currentRoomId = room;
       roomLabel.textContent = `Room ${room}`;
       joinScreen.style.display = "none";
       chatScreen.style.display = "flex";
@@ -716,6 +782,15 @@
     joinBtn.addEventListener("click", joinRoom);
     roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
     nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") roomInput.focus(); });
+    updateNameBtn.addEventListener("click", submitDisplayNameChange);
+    displayNameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitDisplayNameChange();
+    });
+    clearRoomBtn.addEventListener("click", () => {
+      if (!currentRoomId) return;
+      if (!window.confirm("Clear all messages in this room?")) return;
+      socket.emit("clear-room");
+    });
 
     leaveBtn.addEventListener("click", () => {
       fetch("/logout", { method: "POST", keepalive: true, headers: authHeaders })
@@ -791,8 +866,23 @@
     sendBtn.addEventListener("click", sendMessage);
     msgInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
 
+    socket.on("connect", () => {
+      if (!currentRoomId || !myName || chatScreen.style.display !== "flex") return;
+      socket.emit("join-room", { room: currentRoomId, name: myName });
+    });
+
     socket.on("message", appendMessage);
     socket.on("chat-history", (history) => { history.forEach(appendMessage); });
+    socket.on("room-cleared", () => {
+      messagesEl.innerHTML = "";
+    });
+    socket.on("name-updated", syncDisplayName);
+    socket.on("name-changed", ({ userId, name }) => {
+      updateRenderedDisplayName(userId, name);
+      if (userId === tabToken) {
+        syncDisplayName(name);
+      }
+    });
     socket.on("user-count", (count) => { userCount.textContent = ` · ${count} online`; });
 
     // ── Scheduled rooms ──
