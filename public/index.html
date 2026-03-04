@@ -848,6 +848,19 @@
       if (!file) return;
       stickerFileInput.value = "";
 
+      if (file.type === "image/gif") {
+        const formData = new FormData();
+        formData.append("sticker", file, file.name);
+        fetch("/upload-sticker", { method: "POST", body: formData, headers: authHeaders })
+          .then((res) => {
+            if (!res.ok) throw new Error("Upload failed");
+          })
+          .catch(() => {
+            alert("Failed to upload sticker.");
+          });
+        return;
+      }
+
       const img = new Image();
       img.onload = async () => {
         // Center-crop to square, resize to 128x128
