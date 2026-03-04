@@ -74,14 +74,15 @@ const upload = multer({
 // Configure multer for sticker uploads
 const stickerStorage = multer.diskStorage({
   destination: STICKERS_DIR,
-  filename: (_req, _file, cb) => {
-    cb(null, crypto.randomUUID() + ".png");
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".png";
+    cb(null, crypto.randomUUID() + ext);
   },
 });
 
 const stickerUpload = multer({
   storage: stickerStorage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB (already cropped client-side)
+  limits: { fileSize: 10 * 1024 * 1024 }, // Allow larger GIF uploads
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
       cb(null, true);
@@ -169,9 +170,9 @@ for (const { dir, urlPrefix } of BUILTIN_STICKER_DIRS) {
 
 // User-uploaded stickers from disk on startup
 const userStickers = fs.readdirSync(STICKERS_DIR)
-  .filter((f) => f.endsWith(".png"))
+  .filter((f) => /\.(png|jpe?g|gif|webp)$/i.test(f))
   .map((f) => ({
-    id: path.basename(f, ".png"),
+    id: path.basename(f, path.extname(f)),
     url: `/uploaded-stickers/${f}`,
   }));
 
@@ -183,7 +184,7 @@ app.post("/upload-sticker", requireAccess, stickerUpload.single("sticker"), (req
     return res.status(400).json({ error: "No file uploaded" });
   }
   const sticker = {
-    id: path.basename(req.file.filename, ".png"),
+    id: path.basename(req.file.filename, path.extname(req.file.filename)),
     url: `/uploaded-stickers/${req.file.filename}`,
   };
   stickers.push(sticker);
