@@ -1,161 +1,1149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17988995136"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NoteChat</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    gtag('config', 'AW-17988995136');
-  </script>
+    html, body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
 
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Chat Off Record — Anonymous Self-Destructing Chat Rooms | No Login Required</title>
-  <meta name="description" content="Create anonymous chat rooms that self-destruct. No account, no logs, no trace. Share a private chat link — messages disappear when the timer ends. Free ephemeral chat with no sign-up." />
-  <meta name="keywords" content="anonymous chat, temporary chat room, self destruct chatroom, off the record chat, ephemeral chat, private chat link no account, anonymous group chat no login" />
-  <link rel="canonical" href="https://chatoffrecord.com/" />
+    /* ── Join Screen ── */
+    #join-screen {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    #join-screen .join-inner {
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+    #join-screen h1 {
+      font-size: 2rem;
+      margin-bottom: .25rem;
+      color: #f8fafc;
+    }
+    #join-screen .subtitle {
+      color: #94a3b8;
+      margin-bottom: 1.5rem;
+      font-size: .95rem;
+    }
+    .form-input {
+      width: 100%;
+      padding: .75rem 1rem;
+      margin-bottom: .75rem;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #1e293b;
+      color: #f8fafc;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-input:focus { border-color: #6366f1; }
+    .btn-primary {
+      width: 100%;
+      padding: .75rem;
+      border: none;
+      border-radius: 8px;
+      background: #6366f1;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn-primary:hover { background: #4f46e5; }
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="Chat Off Record — Anonymous Self-Destructing Chat Rooms" />
-  <meta property="og:description" content="Create anonymous chat rooms that self-destruct. No account, no logs, no trace. Messages disappear when the timer ends." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://chatoffrecord.com/" />
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin: 1.5rem 0;
+      color: #475569;
+      font-size: .8rem;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: #334155;
+    }
 
-  <link rel="icon" href="/favicon.ico" />
-  <link rel="stylesheet" href="/css/style.css" />
+    /* ── Schedule form ── */
+    .schedule-form {
+      display: flex;
+      gap: .5rem;
+      margin-bottom: .75rem;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+    .schedule-form > .form-input,
+    .schedule-form > .btn-secondary {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .schedule-form .form-input {
+      margin-bottom: 0;
+      height: 30px;
+      padding: 0 .9rem;
+      line-height: 28px;
+    }
+    .schedule-form .sched-room-input {
+      flex: 1 1 0;
+    }
+    .schedule-form input[type="datetime-local"] {
+      color-scheme: dark;
+      flex: 1 1 0;
+      appearance: none;
+      -webkit-appearance: none;
+      height: 30px;
+      min-height: 30px;
+      line-height: 28px;
+      font-size: .82rem;
+      padding: 0 .5rem;
+      box-sizing: border-box;
+    }
+    #sched-time {
+      height: 30px !important;
+      min-height: 30px !important;
+      max-height: 30px !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+    }
+    .schedule-form input[type="datetime-local"]::-webkit-date-and-time-value {
+      min-height: 0;
+      margin: 0;
+      line-height: 1.1;
+      text-align: left;
+    }
+    .schedule-form input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      padding: 0;
+    }
+    .schedule-form input[type="datetime-local"]::-webkit-datetime-edit {
+      padding: 0;
+      line-height: 1.1;
+    }
+    .schedule-form input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+      margin: 0;
+      padding: 0;
+    }
+    .schedule-form .btn-secondary {
+      height: 30px;
+      padding: 0 .95rem;
+      line-height: 28px;
+      flex: 1 1 0;
+    }
+    .schedule-form .form-input,
+    .schedule-form #sched-time,
+    .schedule-form .btn-secondary {
+      height: 30px !important;
+      min-height: 30px !important;
+      max-height: 30px !important;
+      box-sizing: border-box;
+      margin: 0;
+      border-radius: 8px;
+      font-size: .82rem;
+    }
+    .schedule-form .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .btn-secondary {
+      padding: .75rem 1rem;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #1e293b;
+      color: #a5b4fc;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-secondary:hover { border-color: #6366f1; color: #f8fafc; }
 
-  <!-- Structured data for Google rich results -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": "How does the self-destructing chat room work?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "When you create a room, a countdown timer starts. Once it reaches zero, the room and all messages are permanently destroyed. Nothing is saved to any server or database — messages only exist in real-time while the room is active."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Do I need an account or login?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "No. Chat Off Record requires no sign-up, no email, and no login. Just pick a display name and start chatting. Your identity stays anonymous."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Can anyone read my messages?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "No. We do not store, log, or monitor any message content. Messages are transmitted in real-time between participants and are never written to a database. Once the room is destroyed, the conversation is gone permanently."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What is a permanent private room?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "For a one-time payment, you can create a room with a custom URL that doesn't expire. You can optionally protect it with a codeword. Messages still disappear when everyone leaves — only the room link persists."
-        }
+    /* ── Scheduled rooms list ── */
+    .scheduled-list {
+      text-align: left;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .scheduled-list .empty {
+      text-align: center;
+      color: #475569;
+      font-size: .85rem;
+      padding: .75rem 0;
+    }
+    .scheduled-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .6rem .85rem;
+      margin-bottom: .4rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color .2s;
+      gap: .5rem;
+    }
+    .scheduled-item:hover { border-color: #6366f1; }
+    .scheduled-item .room-info {
+      display: flex;
+      align-items: baseline;
+      gap: .5rem;
+      min-width: 0;
+      flex: 1;
+    }
+    .scheduled-item .room-num {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #f8fafc;
+      flex-shrink: 0;
+    }
+    .scheduled-item .room-time {
+      font-size: .85rem;
+      color: #a5b4fc;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .scheduled-item .remove-sched {
+      background: none;
+      border: none;
+      color: #64748b;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: .1rem .4rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .scheduled-item .remove-sched:hover { color: #ef4444; }
+
+    /* ── Sticker upload section (landing page) ── */
+    .sticker-upload-section input[type="file"] { display: none; }
+    .sticker-upload-section .hint {
+      margin-top: .45rem;
+      color: #64748b;
+      font-size: .75rem;
+      text-align: center;
+    }
+    .sticker-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      justify-content: center;
+      margin-top: .75rem;
+    }
+    .sticker-grid .empty {
+      color: #475569;
+      font-size: .85rem;
+      padding: .75rem 0;
+      width: 100%;
+      text-align: center;
+    }
+    .sticker-thumb {
+      position: relative;
+      width: 64px;
+      height: 64px;
+    }
+    .sticker-thumb img {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid #334155;
+    }
+    .sticker-thumb .remove-sticker {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: none;
+      background: #ef4444;
+      color: #fff;
+      font-size: .7rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .sticker-thumb .remove-sticker:hover { background: #dc2626; }
+
+    /* hidden canvas for cropping */
+    #crop-canvas { display: none; }
+
+    /* ── Chat Screen ── */
+    #chat-screen {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+      padding: .75rem 1rem;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .chat-header .header-meta {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: .35rem;
+    }
+    .chat-header .room-label {
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .chat-header .user-count {
+      font-size: .85rem;
+      color: #94a3b8;
+      line-height: 1;
+    }
+    .chat-header .header-actions {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-shrink: 0;
+    }
+    .chat-header button {
+      background: none;
+      border: 1px solid #475569;
+      color: #94a3b8;
+      padding: .4rem .75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .85rem;
+    }
+    .chat-header button:hover { color: #f8fafc; border-color: #94a3b8; }
+    .chat-header .clear-btn:hover {
+      color: #fecaca;
+      border-color: #ef4444;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      min-height: 0;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .msg {
+      max-width: 80%;
+      padding: .6rem .9rem;
+      border-radius: 12px;
+      line-height: 1.45;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    .msg.system {
+      align-self: center;
+      max-width: 100%;
+      background: none;
+      color: #64748b;
+      font-size: .8rem;
+      text-align: center;
+      padding: .25rem 0;
+    }
+    .msg.self {
+      align-self: flex-end;
+      background: #6366f1;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.other {
+      align-self: flex-start;
+      background: #1e293b;
+      border-bottom-left-radius: 4px;
+    }
+    .msg.sticker-msg {
+      background: none !important;
+      padding: .2rem;
+    }
+    .msg .author {
+      font-size: .75rem;
+      font-weight: 600;
+      color: #a5b4fc;
+      margin-bottom: 2px;
+    }
+    .msg.self .author { color: rgba(255,255,255,.7); }
+    .msg.sticker-msg.self .author { color: #a5b4fc; }
+    .msg .time {
+      font-size: .65rem;
+      color: rgba(255,255,255,.45);
+      margin-top: 2px;
+      text-align: right;
+    }
+    .msg.other .time { color: #64748b; }
+    .msg.sticker-msg .time { color: #64748b; }
+
+    .msg .sticker-img {
+      width: 120px;
+      height: 120px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+
+    .msg img:not(.sticker-img) {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      margin-top: 4px;
+      cursor: pointer;
+    }
+    .msg video {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      margin-top: 4px;
+    }
+
+    /* ── Sticker picker panel (chat) ── */
+    .sticker-picker {
+      display: none;
+      padding: .75rem;
+      background: #1e293b;
+      border-top: 1px solid #334155;
+      flex-shrink: 0;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .sticker-picker.active { display: block; }
+    .sticker-picker .sticker-picker-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+    }
+    .sticker-picker .sticker-picker-grid .empty {
+      color: #475569;
+      font-size: .85rem;
+      padding: .25rem 0;
+    }
+    .sticker-picker .sticker-pick {
+      width: 56px;
+      height: 56px;
+      border-radius: 8px;
+      object-fit: cover;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color .15s, transform .15s;
+    }
+    .sticker-picker .sticker-pick:hover {
+      border-color: #6366f1;
+      transform: scale(1.1);
+    }
+
+    .chat-input {
+      display: flex;
+      padding: .6rem .75rem;
+      gap: .4rem;
+      background: #1e293b;
+      border-top: 1px solid #334155;
+      align-items: flex-end;
+      flex-shrink: 0;
+    }
+    .chat-input input[type="text"] {
+      flex: 1;
+      padding: .7rem .75rem;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #f8fafc;
+      font-size: 1rem;
+      outline: none;
+      min-width: 0;
+    }
+    .chat-input input[type="text"]:focus { border-color: #6366f1; }
+    .chat-input input[type="file"] { display: none; }
+
+    .chat-input .icon-btn {
+      padding: .6rem;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #94a3b8;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      flex-shrink: 0;
+    }
+    .chat-input .icon-btn:hover { border-color: #6366f1; color: #f8fafc; }
+    .chat-input .icon-btn.active { border-color: #6366f1; color: #a5b4fc; }
+
+    .chat-input .send-btn {
+      padding: .7rem 1rem;
+      border: none;
+      border-radius: 8px;
+      background: #6366f1;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .chat-input .send-btn:hover { background: #4f46e5; }
+
+    /* File preview bar */
+    .file-preview {
+      display: none;
+      padding: .5rem 1rem;
+      background: #1e293b;
+      border-top: 1px solid #334155;
+      align-items: center;
+      gap: .75rem;
+      flex-shrink: 0;
+    }
+    .file-preview.active { display: flex; }
+    .file-preview img,
+    .file-preview video {
+      max-height: 60px;
+      border-radius: 6px;
+    }
+    .file-preview .file-name {
+      flex: 1;
+      font-size: .85rem;
+      color: #94a3b8;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .file-preview .remove-btn {
+      background: none;
+      border: none;
+      color: #ef4444;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: .25rem;
+    }
+
+    /* Lightbox overlay */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.85);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .lightbox.active { display: flex; }
+    .lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: 8px;
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 480px) {
+      #join-screen {
+        justify-content: flex-start;
+        padding: 1.5rem 1rem;
       }
-    ]
-  }
-  </script>
+      #join-screen h1 { font-size: 1.6rem; }
+      .schedule-form {
+        flex-direction: column;
+      }
+      .schedule-form .sched-room-input {
+        flex: unset;
+        width: 100%;
+      }
+      .schedule-form .form-input,
+      .schedule-form .btn-secondary {
+        width: 100%;
+      }
+      .schedule-form input[type="datetime-local"] {
+        height: 30px;
+        min-height: 30px;
+        line-height: 28px;
+        font-size: .8rem;
+      }
+      .msg {
+        max-width: 88%;
+        font-size: 1.05rem;
+      }
+      .chat-input input[type="text"] {
+        font-size: 1.05rem;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .chat-header {
+        flex-direction: row;
+        align-items: center;
+        gap: .4rem;
+        padding: .6rem .65rem;
+      }
+      .chat-header .room-label {
+        display: block;
+        font-size: .95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chat-header .user-count {
+        display: block;
+        font-size: .75rem;
+      }
+      .chat-header .header-actions {
+        width: auto;
+        flex-wrap: nowrap;
+        gap: .3rem;
+      }
+      .chat-header #update-name-btn,
+      .chat-header #clear-room-btn,
+      .chat-header #leave-btn {
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding: .35rem .5rem;
+        font-size: .78rem;
+        text-align: center;
+      }
+    }
+  </style>
 </head>
 <body>
-  <div class="landing">
-    <div class="landing-card">
-      <h1 class="sr-only">Chat Off Record — Anonymous Self-Destructing Chat Rooms</h1>
-      <img src="/img/brandchatoffrecord.png" alt="Chat Off Record — anonymous temporary chat rooms" class="brand-logo" />
-      <p class="tagline" id="tagline">Anonymous rooms that self-destruct.</p>
 
-      <div class="privacy-badges">
-        <span class="badge">No account</span>
-        <span class="badge">No logs</span>
-        <span class="badge">Messages disappear</span>
+  <!-- Join Screen -->
+  <div id="join-screen">
+    <div class="join-inner">
+      <h1>NoteChat</h1>
+      <p class="subtitle">Enter a room number to join or create a chat room.</p>
+      <input id="name-input" class="form-input" type="text" placeholder="Your name" maxlength="30" autofocus>
+      <input id="room-input" class="form-input" type="text" placeholder="Room number" maxlength="20">
+      <button class="btn-primary" id="join-btn">Join Room</button>
+
+      <div class="divider">or publish a scheduled room</div>
+
+      <div class="schedule-form">
+        <input id="sched-room" class="form-input sched-room-input" type="text" placeholder="Room #" maxlength="20">
+        <input id="sched-time" class="form-input" type="datetime-local">
+        <button class="btn-secondary" id="publish-btn">Publish</button>
       </div>
 
-      <!-- Step 1: Create room button -->
-      <div id="step-create">
-        <button id="btn-create" class="btn-primary">Create Anonymous Room</button>
+      <div class="scheduled-list" id="scheduled-list">
+        <div class="empty">No scheduled rooms yet</div>
+      </div>
 
-        <!-- Permanent room CTA (hidden if not configured) -->
-        <div id="permanent-cta" class="hidden">
-          <div class="divider"><span>or</span></div>
-          <button id="btn-permanent" class="btn-permanent">
-            Create Permanent Private Room — $2.99
-          </button>
-          <p class="permanent-note">One-time payment. Custom URL. Optional codeword.</p>
+      <div class="divider">custom stickers</div>
+
+      <div class="sticker-upload-section">
+        <button class="btn-secondary" id="add-sticker-btn" style="width:100%">Upload Sticker Images</button>
+        <input type="file" id="sticker-file-input" accept="image/*" multiple>
+        <div class="hint">Desktop: hold Cmd/Ctrl to select multiple images</div>
+        <canvas id="crop-canvas" width="128" height="128"></canvas>
+        <div class="sticker-grid" id="sticker-grid-landing">
+          <div class="empty">No stickers yet</div>
         </div>
       </div>
-
-      <!-- Step 2: Name prompt for ephemeral room (hidden initially) -->
-      <div id="step-name" class="hidden">
-        <p class="prompt-text">What should we call you?</p>
-        <div class="name-input-row">
-          <input
-            type="text"
-            id="input-name"
-            placeholder="e.g. Shadow, Guest42"
-            maxlength="30"
-            autocomplete="off"
-          />
-          <button id="btn-enter" class="btn-primary">Enter Room</button>
-        </div>
-      </div>
-
-      <p class="privacy-note">We cannot read or recover your chats.</p>
     </div>
   </div>
 
-  <!-- SEO content — visible below the fold -->
-  <section class="seo-section">
-    <div class="seo-content">
-      <h2>Private, anonymous chat — no sign-up needed</h2>
-      <p>
-        Chat Off Record lets you create temporary chat rooms that self-destruct automatically.
-        No account required, no message logs, no data stored. Just share a private chat link
-        and start talking. When the timer runs out, your messages disappear forever.
-      </p>
-      <p>
-        Whether you need an off-the-record conversation, a quick anonymous group chat,
-        or a private chat link you can share without creating an account — Chat Off Record
-        is built for conversations that leave no trace.
-      </p>
-
-      <div class="faq-list">
-        <h3>Frequently Asked Questions</h3>
-
-        <details class="faq-item">
-          <summary>How does the self-destructing chat room work?</summary>
-          <p>When you create a room, a countdown timer starts. Once it reaches zero, the room and all messages are permanently destroyed. Nothing is saved to any server or database — messages only exist in real-time while the room is active.</p>
-        </details>
-
-        <details class="faq-item">
-          <summary>Do I need an account or login?</summary>
-          <p>No. Chat Off Record requires no sign-up, no email, and no login. Just pick a display name and start chatting. Your identity stays anonymous.</p>
-        </details>
-
-        <details class="faq-item">
-          <summary>Can anyone read my messages?</summary>
-          <p>No. We do not store, log, or monitor any message content. Messages are transmitted in real-time between participants and are never written to a database. Once the room is destroyed, the conversation is gone permanently.</p>
-        </details>
-
-        <details class="faq-item">
-          <summary>What is a permanent private room?</summary>
-          <p>For a one-time payment, you can create a room with a custom URL that doesn't expire. You can optionally protect it with a codeword. Messages still disappear when everyone leaves — only the room link persists.</p>
-        </details>
+  <!-- Chat Screen -->
+  <div id="chat-screen">
+    <div class="chat-header">
+      <div class="header-meta">
+        <span class="room-label" id="room-label"></span>
+        <span class="user-count" id="user-count"></span>
+      </div>
+      <div class="header-actions">
+        <button id="update-name-btn" title="Update display name">Update</button>
+        <button id="clear-room-btn" class="clear-btn" title="Clear all messages in this room">Clear</button>
+        <button id="leave-btn">Leave</button>
       </div>
     </div>
-  </section>
+    <div id="messages"></div>
+    <div class="sticker-picker" id="sticker-picker">
+      <div class="sticker-picker-grid" id="sticker-picker-grid"></div>
+    </div>
+    <div class="file-preview" id="file-preview">
+      <div id="file-thumb"></div>
+      <span class="file-name" id="file-name"></span>
+      <button class="remove-btn" id="remove-file">&times;</button>
+    </div>
+    <div class="chat-input">
+      <button class="icon-btn" id="attach-btn" title="Attach photo or video">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="sticker-btn" title="Stickers">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+          <line x1="9" y1="9" x2="9.01" y2="9"/>
+          <line x1="15" y1="9" x2="15.01" y2="9"/>
+        </svg>
+      </button>
+      <input type="file" id="file-input" accept="image/*,video/*">
+      <input id="msg-input" type="text" placeholder="Type a message..." maxlength="2000">
+      <button class="send-btn" id="send-btn">Send</button>
+    </div>
+  </div>
 
-  <script src="/js/landing.js"></script>
+  <!-- Lightbox for full-size images -->
+  <div class="lightbox" id="lightbox">
+    <img id="lightbox-img" src="">
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const TAB_STORAGE_KEY = "notechat_tab_token";
+    const tabToken = sessionStorage.getItem(TAB_STORAGE_KEY);
+
+    if (!tabToken) {
+      window.location.replace("/access");
+      throw new Error("Missing tab token");
+    }
+
+    function withTab(url) {
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}tab=${encodeURIComponent(tabToken)}`;
+    }
+
+    const authHeaders = { "x-tab-token": tabToken };
+
+    const socket = io({
+      auth: { tab: tabToken },
+    });
+
+    const joinScreen   = document.getElementById("join-screen");
+    const chatScreen   = document.getElementById("chat-screen");
+    const nameInput    = document.getElementById("name-input");
+    const roomInput    = document.getElementById("room-input");
+    const joinBtn      = document.getElementById("join-btn");
+    const leaveBtn     = document.getElementById("leave-btn");
+    const clearRoomBtn = document.getElementById("clear-room-btn");
+    const updateNameBtn = document.getElementById("update-name-btn");
+    const roomLabel    = document.getElementById("room-label");
+    const userCount    = document.getElementById("user-count");
+    const messagesEl   = document.getElementById("messages");
+    const msgInput     = document.getElementById("msg-input");
+    const sendBtn      = document.getElementById("send-btn");
+    const attachBtn    = document.getElementById("attach-btn");
+    const fileInput    = document.getElementById("file-input");
+    const filePreview  = document.getElementById("file-preview");
+    const fileThumb    = document.getElementById("file-thumb");
+    const fileName     = document.getElementById("file-name");
+    const removeFile   = document.getElementById("remove-file");
+    const lightbox     = document.getElementById("lightbox");
+    const lightboxImg  = document.getElementById("lightbox-img");
+    const schedRoom    = document.getElementById("sched-room");
+    const schedTime    = document.getElementById("sched-time");
+    const publishBtn   = document.getElementById("publish-btn");
+    const scheduledList = document.getElementById("scheduled-list");
+    const addStickerBtn = document.getElementById("add-sticker-btn");
+    const stickerFileInput = document.getElementById("sticker-file-input");
+    const cropCanvas   = document.getElementById("crop-canvas");
+    const stickerGridLanding = document.getElementById("sticker-grid-landing");
+    const stickerBtn   = document.getElementById("sticker-btn");
+    const stickerPicker = document.getElementById("sticker-picker");
+    const stickerPickerGrid = document.getElementById("sticker-picker-grid");
+
+    let myName = "";
+    let currentRoomId = "";
+    let pendingFile = null;
+    let currentStickers = [];
+
+    function formatTime(ts) {
+      return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function renderMedia(msg) {
+      if (!msg.fileUrl) return "";
+      if (msg.mediaType === "video") {
+        return `<video src="${withTab(msg.fileUrl)}" controls playsinline></video>`;
+      }
+      const mediaUrl = withTab(msg.fileUrl);
+      return `<img src="${mediaUrl}" alt="shared image" onclick="openLightbox('${mediaUrl}')">`;
+    }
+
+    function openLightbox(src) {
+      lightboxImg.src = src;
+      lightbox.classList.add("active");
+    }
+    lightbox.addEventListener("click", () => {
+      lightbox.classList.remove("active");
+      lightboxImg.src = "";
+    });
+
+    function appendMessage(msg) {
+      const div = document.createElement("div");
+      div.classList.add("msg");
+
+      if (msg.type === "system") {
+        div.classList.add("system");
+        div.textContent = msg.text;
+      } else {
+        const isSelf = msg.userId ? msg.userId === tabToken : false;
+        div.classList.add(isSelf ? "self" : "other");
+        if (msg.userId) {
+          div.dataset.userId = msg.userId;
+        }
+
+        if (msg.stickerUrl) {
+          const stickerUrl = withTab(msg.stickerUrl);
+          div.classList.add("sticker-msg");
+          div.innerHTML =
+            `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>` +
+            `<img class="sticker-img" src="${stickerUrl}" alt="sticker">`;
+        } else {
+          let content = `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>`;
+          if (msg.text) content += `<div>${escapeHtml(msg.text)}</div>`;
+          content += renderMedia(msg);
+          div.innerHTML = content;
+        }
+      }
+
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function updateRenderedDisplayName(userId, name) {
+      if (!userId || !name) return;
+
+      messagesEl.querySelectorAll(`.msg[data-user-id="${userId}"] .author`).forEach((authorEl) => {
+        authorEl.textContent = userId === tabToken ? "You" : name;
+      });
+    }
+
+    function syncDisplayName(name) {
+      myName = name;
+      nameInput.value = name;
+    }
+
+    function submitDisplayNameChange() {
+      const inputName = window.prompt("Enter a new display name", myName);
+      if (inputName === null) return;
+      const trimmed = inputName.trim().slice(0, 30);
+      if (!trimmed) return;
+      if (trimmed === myName) return;
+
+      syncDisplayName(trimmed);
+      socket.emit("update-name", { name: trimmed });
+    }
+
+    function joinRoom() {
+      const name = nameInput.value.trim().slice(0, 30);
+      const room = roomInput.value.trim();
+      if (!name || !room) return;
+
+      syncDisplayName(name);
+      currentRoomId = room;
+      roomLabel.textContent = `Room ${room}`;
+      joinScreen.style.display = "none";
+      chatScreen.style.display = "flex";
+      messagesEl.innerHTML = "";
+
+      socket.emit("join-room", { room, name });
+      msgInput.focus();
+    }
+
+    joinBtn.addEventListener("click", joinRoom);
+    roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
+    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") roomInput.focus(); });
+    updateNameBtn.addEventListener("click", submitDisplayNameChange);
+    clearRoomBtn.addEventListener("click", () => {
+      if (!currentRoomId) return;
+      if (!window.confirm("Clear all messages in this room?")) return;
+      socket.emit("clear-room");
+    });
+
+    leaveBtn.addEventListener("click", () => {
+      fetch("/logout", { method: "POST", keepalive: true, headers: authHeaders })
+        .finally(() => {
+          sessionStorage.removeItem(TAB_STORAGE_KEY);
+          window.location.replace("/access");
+        });
+    });
+
+    // ── File attachment ──
+    attachBtn.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      pendingFile = file;
+      fileName.textContent = file.name;
+      fileThumb.innerHTML = "";
+
+      if (file.type.startsWith("video/")) {
+        const vid = document.createElement("video");
+        vid.src = URL.createObjectURL(file);
+        vid.muted = true;
+        fileThumb.appendChild(vid);
+      } else {
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(file);
+        fileThumb.appendChild(img);
+      }
+
+      filePreview.classList.add("active");
+    });
+
+    removeFile.addEventListener("click", clearPendingFile);
+
+    function clearPendingFile() {
+      pendingFile = null;
+      fileInput.value = "";
+      filePreview.classList.remove("active");
+      fileThumb.innerHTML = "";
+      fileName.textContent = "";
+    }
+
+    // ── Send message ──
+    async function sendMessage() {
+      const text = msgInput.value.trim();
+      if (!text && !pendingFile) return;
+
+      let fileUrl = null;
+      let mediaType = null;
+
+      if (pendingFile) {
+        const formData = new FormData();
+        formData.append("file", pendingFile);
+
+        try {
+          const res = await fetch("/upload", { method: "POST", body: formData, headers: authHeaders });
+          if (!res.ok) throw new Error("Upload failed");
+          const data = await res.json();
+          fileUrl = data.url;
+          mediaType = data.mediaType;
+        } catch (err) {
+          alert("Failed to upload file. Please try again.");
+          return;
+        }
+        clearPendingFile();
+      }
+
+      socket.emit("send-message", { text, fileUrl, mediaType });
+      msgInput.value = "";
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    msgInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+
+    socket.on("connect", () => {
+      if (!currentRoomId || !myName || chatScreen.style.display !== "flex") return;
+      socket.emit("join-room", { room: currentRoomId, name: myName });
+    });
+
+    socket.on("message", appendMessage);
+    socket.on("chat-history", (history) => { history.forEach(appendMessage); });
+    socket.on("room-cleared", () => {
+      messagesEl.innerHTML = "";
+    });
+    socket.on("name-updated", syncDisplayName);
+    socket.on("name-changed", ({ userId, name }) => {
+      updateRenderedDisplayName(userId, name);
+      if (userId === tabToken) {
+        syncDisplayName(name);
+      }
+    });
+    socket.on("user-count", (count) => { userCount.textContent = ` · ${count} online`; });
+
+    // ── Scheduled rooms ──
+    publishBtn.addEventListener("click", () => {
+      const room = schedRoom.value.trim();
+      const timeVal = schedTime.value;
+      if (!room) { schedRoom.focus(); return; }
+      if (!timeVal) { schedTime.focus(); return; }
+      const formatted = new Date(timeVal).toLocaleString([], {
+        month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+      });
+      socket.emit("publish-room", { room, time: formatted });
+      schedRoom.value = "";
+      schedTime.value = "";
+    });
+
+    function renderScheduledRooms(list) {
+      if (!list.length) {
+        scheduledList.innerHTML = '<div class="empty">No scheduled rooms yet</div>';
+        return;
+      }
+      scheduledList.innerHTML = list.map((s) =>
+        `<div class="scheduled-item" data-room="${escapeHtml(s.room)}" data-id="${escapeHtml(s.id)}">
+          <div class="room-info">
+            <span class="room-num">${escapeHtml(s.room)}</span>
+            <span class="room-time">${escapeHtml(s.time)}</span>
+          </div>
+          <button class="remove-sched" title="Remove">&times;</button>
+        </div>`
+      ).join("");
+
+      scheduledList.querySelectorAll(".scheduled-item").forEach((el) => {
+        el.querySelector(".remove-sched").addEventListener("click", (e) => {
+          e.stopPropagation();
+          socket.emit("remove-scheduled", { id: el.dataset.id });
+        });
+
+        el.addEventListener("click", (e) => {
+          if (e.target.closest(".remove-sched")) return;
+          roomInput.value = el.dataset.room;
+          roomInput.focus();
+        });
+      });
+    }
+
+    socket.on("scheduled-rooms", renderScheduledRooms);
+
+    // ── Stickers ──
+    stickerFileInput.multiple = true;
+    addStickerBtn.addEventListener("click", () => stickerFileInput.click());
+
+    async function uploadStickerFile(file) {
+      if (file.type === "image/gif") {
+        const formData = new FormData();
+        formData.append("sticker", file, file.name);
+        const res = await fetch("/upload-sticker", { method: "POST", body: formData, headers: authHeaders });
+        if (!res.ok) throw new Error("Upload failed");
+        return;
+      }
+
+      const blob = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const size = Math.min(img.width, img.height);
+          const sx = (img.width - size) / 2;
+          const sy = (img.height - size) / 2;
+          const ctx = cropCanvas.getContext("2d");
+          ctx.clearRect(0, 0, 128, 128);
+          ctx.drawImage(img, sx, sy, size, size, 0, 0, 128, 128);
+          URL.revokeObjectURL(img.src);
+
+          cropCanvas.toBlob((outBlob) => {
+            if (!outBlob) return reject(new Error("Crop failed"));
+            resolve(outBlob);
+          }, "image/png");
+        };
+        img.onerror = () => reject(new Error("Image load failed"));
+        img.src = URL.createObjectURL(file);
+      });
+
+      const formData = new FormData();
+      formData.append("sticker", blob, "sticker.png");
+      const res = await fetch("/upload-sticker", { method: "POST", body: formData, headers: authHeaders });
+      if (!res.ok) throw new Error("Upload failed");
+    }
+
+    stickerFileInput.addEventListener("change", async () => {
+      const files = Array.from(stickerFileInput.files || []);
+      if (!files.length) return;
+      stickerFileInput.value = "";
+
+      let failed = 0;
+      for (const file of files) {
+        try {
+          await uploadStickerFile(file);
+        } catch (_err) {
+          failed += 1;
+        }
+      }
+
+      if (failed > 0) {
+        alert(`${failed} sticker upload${failed > 1 ? "s" : ""} failed.`);
+      }
+    });
+
+    function renderStickerGridLanding(list) {
+      if (!list.length) {
+        stickerGridLanding.innerHTML = '<div class="empty">No stickers yet</div>';
+        return;
+      }
+      stickerGridLanding.innerHTML = list.map((s) =>
+        `<div class="sticker-thumb" data-id="${s.id}">
+          <img src="${withTab(s.url)}" alt="sticker">
+          ${s.builtin ? '' : '<button class="remove-sticker" title="Remove">&times;</button>'}
+        </div>`
+      ).join("");
+
+      stickerGridLanding.querySelectorAll(".remove-sticker").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const id = btn.closest(".sticker-thumb").dataset.id;
+          socket.emit("remove-sticker", { id });
+        });
+      });
+    }
+
+    function renderStickerPickerChat(list) {
+      if (!list.length) {
+        stickerPickerGrid.innerHTML = '<span class="empty">No stickers — upload from the landing page</span>';
+        return;
+      }
+      stickerPickerGrid.innerHTML = list.map((s) =>
+        `<img class="sticker-pick" src="${withTab(s.url)}" data-url="${s.url}" alt="sticker">`
+      ).join("");
+
+      stickerPickerGrid.querySelectorAll(".sticker-pick").forEach((img) => {
+        img.addEventListener("click", () => {
+          socket.emit("send-message", { text: "", stickerUrl: img.dataset.url });
+          stickerPicker.classList.remove("active");
+          stickerBtn.classList.remove("active");
+        });
+      });
+    }
+
+    socket.on("stickers", (list) => {
+      currentStickers = list;
+      renderStickerGridLanding(list);
+      renderStickerPickerChat(list);
+    });
+
+    // Toggle sticker picker in chat
+    stickerBtn.addEventListener("click", () => {
+      const isOpen = stickerPicker.classList.toggle("active");
+      stickerBtn.classList.toggle("active", isOpen);
+    });
+  </script>
 </body>
 </html>
