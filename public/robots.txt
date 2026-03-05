@@ -1,9 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /room/
-Disallow: /p/
-Disallow: /admin
-Disallow: /success
-Disallow: /api/
-
-Sitemap: https://chatoffrecord.com/sitemap.xml
