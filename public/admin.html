@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Chat Off Record</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <!-- Login overlay -->
+  <div id="login-screen" class="overlay">
+    <div class="landing-card">
+      <h1 class="logo">Chat Off Record</h1>
+      <p class="tagline">Admin Dashboard</p>
+      <input
+        type="password"
+        id="passcode-input"
+        class="admin-input"
+        placeholder="Enter admin passcode"
+        autocomplete="off"
+      />
+      <button id="btn-login" class="btn-primary" style="width: 100%; margin-top: 12px;">
+        Login
+      </button>
+      <p id="login-error" class="login-error hidden">Invalid passcode.</p>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="hidden">
+    <header class="admin-header">
+      <div>
+        <span class="room-title">Chat Off Record</span>
+        <span class="room-subtitle">Admin Dashboard</span>
+      </div>
+      <button id="btn-logout" class="btn-icon btn-leave">Logout</button>
+    </header>
+
+    <!-- Tab bar -->
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-tab="overview">Overview</button>
+      <button class="admin-tab" data-tab="funnel">Funnel</button>
+      <button class="admin-tab" data-tab="sessions">Sessions</button>
+    </div>
+
+    <!-- Tab 1: Overview (existing content) -->
+    <div class="admin-content tab-content" id="tab-overview">
+      <!-- Visitors -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">Visitors</h2>
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-period">Today</div>
+            <div class="stat-row">
+              <span class="stat-label">Total Visits</span>
+              <span class="stat-value" id="visits-day-total">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Unique Visitors</span>
+              <span class="stat-value" id="visits-day-unique">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">This Week</div>
+            <div class="stat-row">
+              <span class="stat-label">Total Visits</span>
+              <span class="stat-value" id="visits-week-total">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Unique Visitors</span>
+              <span class="stat-value" id="visits-week-unique">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">This Month</div>
+            <div class="stat-row">
+              <span class="stat-label">Total Visits</span>
+              <span class="stat-value" id="visits-month-total">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Unique Visitors</span>
+              <span class="stat-value" id="visits-month-unique">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rooms -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">Rooms Created</h2>
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-period">Today</div>
+            <div class="stat-row">
+              <span class="stat-label">Rooms</span>
+              <span class="stat-value" id="rooms-day">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">This Week</div>
+            <div class="stat-row">
+              <span class="stat-label">Rooms</span>
+              <span class="stat-value" id="rooms-week">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">This Month</div>
+            <div class="stat-row">
+              <span class="stat-label">Rooms</span>
+              <span class="stat-value" id="rooms-month">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rooms per User -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">Rooms per User</h2>
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-period">Average</div>
+            <div class="stat-row">
+              <span class="stat-label">Rooms / User</span>
+              <span class="stat-value" id="avg-rooms">—</span>
+            </div>
+          </div>
+        </div>
+        <h3 class="stat-sub-title">Top Creators</h3>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>IP (masked)</th>
+              <th>Rooms</th>
+            </tr>
+          </thead>
+          <tbody id="top-creators">
+            <tr><td colspan="2" class="table-empty">No data yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Retention -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">User Retention</h2>
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-period">1 Day</div>
+            <div class="stat-row">
+              <span class="stat-label">Returning</span>
+              <span class="stat-value" id="retention-day-count">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Rate</span>
+              <span class="stat-value" id="retention-day-rate">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">7 Days</div>
+            <div class="stat-row">
+              <span class="stat-label">Returning</span>
+              <span class="stat-value" id="retention-week-count">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Rate</span>
+              <span class="stat-value" id="retention-week-rate">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">30 Days</div>
+            <div class="stat-row">
+              <span class="stat-label">Returning</span>
+              <span class="stat-value" id="retention-month-count">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Rate</span>
+              <span class="stat-value" id="retention-month-rate">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Avg Time on Room -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">Average Time on Room</h2>
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-period">Last 30 Days</div>
+            <div class="stat-row">
+              <span class="stat-label">Avg Duration</span>
+              <span class="stat-value" id="avg-time">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Link Shares -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">Link Shares</h2>
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-period">Today</div>
+            <div class="stat-row">
+              <span class="stat-label">Total Shares</span>
+              <span class="stat-value" id="shares-day-total">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Unique Rooms</span>
+              <span class="stat-value" id="shares-day-rooms">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">This Week</div>
+            <div class="stat-row">
+              <span class="stat-label">Total Shares</span>
+              <span class="stat-value" id="shares-week-total">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Unique Rooms</span>
+              <span class="stat-value" id="shares-week-rooms">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">This Month</div>
+            <div class="stat-row">
+              <span class="stat-label">Total Shares</span>
+              <span class="stat-value" id="shares-month-total">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Unique Rooms</span>
+              <span class="stat-value" id="shares-month-rooms">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Permanent Rooms -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">Permanent Rooms</h2>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Slug</th>
+              <th>Created</th>
+              <th>Sessions</th>
+            </tr>
+          </thead>
+          <tbody id="permanent-rooms">
+            <tr><td colspan="3" class="table-empty">No data yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="admin-footer">Auto-refreshes every 60 seconds. No chat messages are stored.</p>
+    </div>
+
+    <!-- Tab 2: Funnel -->
+    <div class="admin-content tab-content hidden" id="tab-funnel">
+      <!-- Period selector -->
+      <div class="funnel-period-selector">
+        <button class="funnel-period-btn active" data-period="day">Today</button>
+        <button class="funnel-period-btn" data-period="week">This Week</button>
+        <button class="funnel-period-btn" data-period="month">This Month</button>
+      </div>
+
+      <!-- Funnel visualization -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">Conversion Funnel</h2>
+        <div id="funnel-steps" class="funnel-container">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Additional metrics -->
+      <div class="stat-section">
+        <h2 class="stat-section-title">Session Metrics</h2>
+        <div class="stat-cards">
+          <div class="stat-card">
+            <div class="stat-period">Avg Session Duration</div>
+            <div class="stat-row">
+              <span class="stat-label">Duration</span>
+              <span class="stat-value" id="funnel-avg-duration">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">Rooms at Auto-Destruction</div>
+            <div class="stat-row">
+              <span class="stat-label">With 2+ people</span>
+              <span class="stat-value" id="funnel-rooms-at-destruction">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">Time to 2nd Person</div>
+            <div class="stat-row">
+              <span class="stat-label">Avg wait</span>
+              <span class="stat-value" id="funnel-time-to-second">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-period">Messages per Room</div>
+            <div class="stat-row">
+              <span class="stat-label">Avg count</span>
+              <span class="stat-value" id="funnel-avg-messages">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="admin-footer">Auto-refreshes every 60 seconds. No chat messages are stored.</p>
+    </div>
+
+    <!-- Tab 3: Sessions -->
+    <div class="admin-content tab-content hidden" id="tab-sessions">
+      <div class="stat-section">
+        <h2 class="stat-section-title">Room Sessions <span class="stat-sub-title">(last 30 days)</span></h2>
+        <div class="sessions-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Room URL</th>
+                <th>Created</th>
+                <th>Duration</th>
+                <th>People</th>
+                <th>Messages</th>
+              </tr>
+            </thead>
+            <tbody id="session-list">
+              <tr><td colspan="5" class="table-empty">No data yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="admin-footer">Auto-refreshes every 60 seconds. No chat messages are stored.</p>
+    </div>
+  </div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>
