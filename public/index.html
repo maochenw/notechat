@@ -89,21 +89,25 @@
       gap: .5rem;
       margin-bottom: .75rem;
       flex-wrap: wrap;
+      align-items: stretch;
+    }
+    .schedule-form > .form-input,
+    .schedule-form > .btn-secondary {
+      flex: 1 1 0;
+      min-width: 0;
     }
     .schedule-form .form-input {
-      flex: 1;
-      min-width: 0;
       margin-bottom: 0;
       height: 30px;
       padding: 0 .9rem;
       line-height: 28px;
     }
     .schedule-form .sched-room-input {
-      flex: 0 0 90px;
+      flex: 1 1 0;
     }
     .schedule-form input[type="datetime-local"] {
       color-scheme: dark;
-      flex: 1 1 auto;
+      flex: 1 1 0;
       appearance: none;
       -webkit-appearance: none;
       height: 30px;
@@ -144,7 +148,24 @@
       height: 30px;
       padding: 0 .95rem;
       line-height: 28px;
-      flex: 0 0 auto;
+      flex: 1 1 0;
+    }
+    .schedule-form .form-input,
+    .schedule-form #sched-time,
+    .schedule-form .btn-secondary {
+      height: 30px !important;
+      min-height: 30px !important;
+      max-height: 30px !important;
+      box-sizing: border-box;
+      margin: 0;
+      border-radius: 8px;
+      font-size: .82rem;
+    }
+    .schedule-form .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
     }
     .btn-secondary {
       padding: .75rem 1rem;
