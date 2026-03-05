@@ -242,9 +242,15 @@
       background: #1e293b;
       border-bottom: 1px solid #334155;
       flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 20;
     }
     .chat-header .header-meta {
       min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: .35rem;
     }
     .chat-header .room-label {
       font-weight: 700;
@@ -253,17 +259,13 @@
     .chat-header .user-count {
       font-size: .85rem;
       color: #94a3b8;
+      line-height: 1;
     }
     .chat-header .header-actions {
       display: flex;
       align-items: center;
       gap: .5rem;
       flex-shrink: 0;
-    }
-    .chat-header .name-controls {
-      display: flex;
-      align-items: center;
-      gap: .4rem;
     }
     .chat-header button {
       background: none;
@@ -272,12 +274,6 @@
       padding: .4rem .75rem;
       border-radius: 6px;
       cursor: pointer;
-      font-size: .85rem;
-    }
-    .chat-header .name-input {
-      width: 130px;
-      margin: 0;
-      padding: .45rem .6rem;
       font-size: .85rem;
     }
     .chat-header button:hover { color: #f8fafc; border-color: #94a3b8; }
@@ -529,6 +525,40 @@
         font-size: 1.05rem;
       }
     }
+
+    @media (max-width: 640px) {
+      .chat-header {
+        flex-direction: row;
+        align-items: center;
+        gap: .4rem;
+        padding: .6rem .65rem;
+      }
+      .chat-header .room-label {
+        display: block;
+        font-size: .95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chat-header .user-count {
+        display: block;
+        font-size: .75rem;
+      }
+      .chat-header .header-actions {
+        width: auto;
+        flex-wrap: nowrap;
+        gap: .3rem;
+      }
+      .chat-header #update-name-btn,
+      .chat-header #clear-room-btn,
+      .chat-header #leave-btn {
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding: .35rem .5rem;
+        font-size: .78rem;
+        text-align: center;
+      }
+    }
   </style>
 </head>
 <body>
@@ -575,10 +605,7 @@
         <span class="user-count" id="user-count"></span>
       </div>
       <div class="header-actions">
-        <div class="name-controls">
-          <input id="display-name-input" class="form-input name-input" type="text" maxlength="30" placeholder="Display name">
-          <button id="update-name-btn" title="Update display name">Update</button>
-        </div>
+        <button id="update-name-btn" title="Update display name">Update</button>
         <button id="clear-room-btn" class="clear-btn" title="Clear all messages in this room">Clear</button>
         <button id="leave-btn">Leave</button>
       </div>
@@ -647,7 +674,6 @@
     const joinBtn      = document.getElementById("join-btn");
     const leaveBtn     = document.getElementById("leave-btn");
     const clearRoomBtn = document.getElementById("clear-room-btn");
-    const displayNameInput = document.getElementById("display-name-input");
     const updateNameBtn = document.getElementById("update-name-btn");
     const roomLabel    = document.getElementById("room-label");
     const userCount    = document.getElementById("user-count");
@@ -748,15 +774,13 @@
     function syncDisplayName(name) {
       myName = name;
       nameInput.value = name;
-      displayNameInput.value = name;
     }
 
     function submitDisplayNameChange() {
-      const trimmed = displayNameInput.value.trim().slice(0, 30);
-      if (!trimmed) {
-        displayNameInput.value = myName;
-        return;
-      }
+      const inputName = window.prompt("Enter a new display name", myName);
+      if (inputName === null) return;
+      const trimmed = inputName.trim().slice(0, 30);
+      if (!trimmed) return;
       if (trimmed === myName) return;
 
       syncDisplayName(trimmed);
@@ -783,9 +807,6 @@
     roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
     nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") roomInput.focus(); });
     updateNameBtn.addEventListener("click", submitDisplayNameChange);
-    displayNameInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") submitDisplayNameChange();
-    });
     clearRoomBtn.addEventListener("click", () => {
       if (!currentRoomId) return;
       if (!window.confirm("Clear all messages in this room?")) return;
