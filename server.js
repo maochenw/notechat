@@ -1,367 +1,798 @@
 const express = require("express");
 const http = require("http");
+const crypto = require("crypto");
 const { Server } = require("socket.io");
 const path = require("path");
-const multer = require("multer");
-const fs = require("fs");
-const crypto = require("crypto");
+const db = require("./db");
+const bcrypt = require("bcryptjs");
+
+// Stripe is loaded for payment verification only
+let stripe = null;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+}
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { maxHttpBufferSize: 300 * 1024 * 1024 });
 
-const ACCESS_CODE = process.env.ACCESS_CODE || "longtimenosee";
-const UPLOADS_DIR = path.join(__dirname, "uploads");
-const STICKERS_DIR = path.join(__dirname, "stickers");
-const PUBLIC_DIR = path.join(__dirname, "public");
-const ACCESS_PAGE = path.join(PUBLIC_DIR, "access.html");
-const APP_PAGE = path.join(PUBLIC_DIR, "index.html");
+const PORT = process.env.PORT || 3000;
+const ROOM_LIFETIME_MS = parseInt(process.env.ROOM_LIFETIME_MS, 10) || 10 * 60 * 1000; // default 10 minutes
+const MAX_MESSAGE_LENGTH = 500;
+const MAX_MEDIA_BYTES = 200 * 1024 * 1024; // 200 MB
+const RATE_LIMIT_MESSAGES_PER_SECOND = 5;
+const RATE_LIMIT_ROOMS_PER_MINUTE = 5;
+const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || "veryHardChallenges!1";
+const TESTING_MODE = process.env.TESTING_MODE === "true";
+const STRIPE_PAYMENT_LINK = process.env.STRIPE_PAYMENT_LINK || null;
+const BREVO_API_KEY = process.env.BREVO_API_KEY || null;
+const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "noreply@chatoffrecord.com";
 
-const tabSessions = new Map();
+// ---------------------------------------------------------------------------
+// PRIVACY NOTE: Chat messages are NEVER stored or logged. The PostgreSQL
+// database only stores anonymous analytics (visit counts, room creation
+// counts by IP). No message content is ever persisted.
+// ---------------------------------------------------------------------------
 
-// Ensure directories exist
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-fs.mkdirSync(STICKERS_DIR, { recursive: true });
-
-app.use(express.urlencoded({ extended: false }));
-
-function createTabSession() {
-  const tabToken = crypto.randomUUID();
-  tabSessions.set(tabToken, { authorized: true, createdAt: Date.now() });
-  return tabToken;
-}
-
-function getTabToken(req) {
-  const headerToken = `${req.headers["x-tab-token"] || ""}`.trim();
-  if (headerToken) return headerToken;
-  return `${req.query.tab || ""}`.trim();
-}
-
-function getTabSession(req) {
-  const tabToken = getTabToken(req);
-  if (!tabToken) return null;
-  return tabSessions.get(tabToken) || null;
-}
-
-function requireAccess(req, res, next) {
-  if (getTabSession(req)?.authorized) {
-    return next();
-  }
-  return res.status(403).json({ error: "Access denied" });
-}
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: UPLOADS_DIR,
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, crypto.randomUUID() + ext);
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/")) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only image and video files are allowed"));
-    }
-  },
-});
-
-// Configure multer for sticker uploads
-const stickerStorage = multer.diskStorage({
-  destination: STICKERS_DIR,
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || ".png";
-    cb(null, crypto.randomUUID() + ext);
-  },
-});
-
-const stickerUpload = multer({
-  storage: stickerStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // Allow larger GIF uploads
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only image files are allowed"));
-    }
-  },
-});
-
-app.get("/access", (req, res) => {
-  return res.sendFile(ACCESS_PAGE);
-});
-
-app.get("/", (_req, res) => {
-  return res.sendFile(ACCESS_PAGE);
-});
-
-app.post("/access", (req, res) => {
-  const submittedCode = `${req.body.code || ""}`.trim();
-  if (submittedCode !== ACCESS_CODE) {
-    return res.redirect("/access?error=1");
-  }
-
-  const tabToken = createTabSession();
-  return res.redirect("/app");
-});
-
-app.post("/access-token", (req, res) => {
-  const submittedCode = `${req.body.code || ""}`.trim();
-  if (submittedCode !== ACCESS_CODE) {
-    return res.status(401).json({ error: "Invalid access code" });
-  }
-
-  const tabToken = createTabSession();
-  return res.json({ tabToken });
-});
-
-app.post("/logout", (req, res) => {
-  const tabToken = getTabToken(req);
-  if (tabToken) {
-    tabSessions.delete(tabToken);
-  }
-  return res.status(204).end();
-});
-
-app.get("/app", (_req, res) => {
-  res.sendFile(APP_PAGE);
-});
-
-app.use("/sticker", requireAccess, express.static(path.join(PUBLIC_DIR, "sticker")));
-app.use("/stickers", requireAccess, express.static(path.join(PUBLIC_DIR, "stickers")));
-app.use("/uploads", requireAccess, express.static(UPLOADS_DIR));
-app.use("/uploaded-stickers", requireAccess, express.static(STICKERS_DIR));
-
-// File upload endpoint
-app.post("/upload", requireAccess, upload.single("file"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
-  const fileUrl = `/uploads/${req.file.filename}`;
-  const mediaType = req.file.mimetype.startsWith("video/") ? "video" : "image";
-  res.json({ url: fileUrl, mediaType });
-});
-
-// Built-in stickers from public/sticker/ and public/stickers/
-const BUILTIN_STICKER_DIRS = [
-  { dir: path.join(__dirname, "public", "sticker"), urlPrefix: "/sticker" },
-  { dir: path.join(__dirname, "public", "stickers"), urlPrefix: "/stickers" },
-];
-
-const builtinStickers = [];
-for (const { dir, urlPrefix } of BUILTIN_STICKER_DIRS) {
-  if (fs.existsSync(dir)) {
-    for (const f of fs.readdirSync(dir)) {
-      if (/\.(png|jpe?g|gif|webp)$/i.test(f)) {
-        builtinStickers.push({
-          id: `builtin-${urlPrefix.slice(1)}-${path.basename(f, path.extname(f))}`,
-          url: `${urlPrefix}/${f}`,
-          builtin: true,
-        });
-      }
-    }
-  }
-}
-
-// User-uploaded stickers from disk on startup
-const userStickers = fs.readdirSync(STICKERS_DIR)
-  .filter((f) => /\.(png|jpe?g|gif|webp)$/i.test(f))
-  .map((f) => ({
-    id: path.basename(f, path.extname(f)),
-    url: `/uploaded-stickers/${f}`,
-  }));
-
-// Combined list: built-in first, then user-uploaded
-const stickers = [...builtinStickers, ...userStickers];
-
-app.post("/upload-sticker", requireAccess, stickerUpload.single("sticker"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
-  const sticker = {
-    id: path.basename(req.file.filename, path.extname(req.file.filename)),
-    url: `/uploaded-stickers/${req.file.filename}`,
-  };
-  stickers.push(sticker);
-  io.emit("stickers", stickers);
-  res.json(sticker);
-});
-
-// Track rooms and their message history
+// In-memory room store: roomId -> { createdAt, timer, destroyed, permanent, sockets: Map }
 const rooms = new Map();
 
-// Scheduled rooms visible on the landing page
-const scheduledRooms = [];
+// Rate limiting for room creation: ip -> [timestamps]
+const roomCreationLog = new Map();
 
-// Delete uploaded files for a room
-function cleanupRoomFiles(room) {
-  const messages = rooms.get(room);
-  if (!messages) return;
-  for (const msg of messages) {
-    if (msg.fileUrl) {
-      const filePath = path.join(__dirname, msg.fileUrl);
-      fs.unlink(filePath, () => {});
-    }
+// Admin auth tokens (in-memory, cleared on restart)
+const adminTokens = new Set();
+
+// In-memory store for testing mode (replaces DB)
+// slug -> { slug, passphrase_hash, paid }
+const testPermanentRooms = new Map();
+
+// ---------------------------------------------------------------------------
+// Middleware
+// ---------------------------------------------------------------------------
+app.use(express.static(path.join(__dirname, "public")));
+app.use(express.json());
+
+// Analytics middleware — log page visits (not static assets or API calls)
+app.use((req, _res, next) => {
+  if (req.method === "GET" && (req.path === "/" || req.path.startsWith("/room/") || req.path.startsWith("/p/"))) {
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    db.logVisit(ip, req.path); // fire-and-forget
   }
-}
-
-io.use((socket, next) => {
-  const tabToken = `${socket.handshake.auth?.tab || ""}`.trim();
-  const session = tabToken ? tabSessions.get(tabToken) : null;
-
-  if (!session?.authorized) {
-    return next(new Error("unauthorized"));
-  }
-
-  return next();
+  next();
 });
 
-io.on("connection", (socket) => {
-  let currentRoom = null;
-  let username = null;
-  const clientId = `${socket.handshake.auth?.tab || socket.id}`;
-
-  // Send current state on connect
-  socket.emit("scheduled-rooms", scheduledRooms);
-  socket.emit("stickers", stickers);
-
-  socket.on("publish-room", ({ room, time }) => {
-    if (!room || !time) return;
-    scheduledRooms.push({ room, time, id: crypto.randomUUID() });
-    io.emit("scheduled-rooms", scheduledRooms);
+// ---------------------------------------------------------------------------
+// API: Config
+// ---------------------------------------------------------------------------
+app.get("/api/config", (_req, res) => {
+  const permanentRoomsEnabled = TESTING_MODE || !!(stripe && STRIPE_PAYMENT_LINK && process.env.DATABASE_URL);
+  res.json({
+    roomLifetimeMs: ROOM_LIFETIME_MS,
+    permanentRoomsEnabled,
+    permanentRoomCheckoutUrl: TESTING_MODE ? "/success" : STRIPE_PAYMENT_LINK,
   });
+});
 
-  socket.on("remove-scheduled", ({ id }) => {
-    const idx = scheduledRooms.findIndex((s) => s.id === id);
-    if (idx !== -1) {
-      scheduledRooms.splice(idx, 1);
-      io.emit("scheduled-rooms", scheduledRooms);
+// ---------------------------------------------------------------------------
+// API: Create room
+// ---------------------------------------------------------------------------
+app.post("/api/rooms", (req, res) => {
+  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+  // Rate limit room creation
+  const now = Date.now();
+  const timestamps = roomCreationLog.get(ip) || [];
+  const recent = timestamps.filter((t) => now - t < 60_000);
+  if (recent.length >= RATE_LIMIT_ROOMS_PER_MINUTE) {
+    return res.status(429).json({ error: "Too many rooms created. Try again shortly." });
+  }
+  recent.push(now);
+  roomCreationLog.set(ip, recent);
+
+  // Generate room ID (10 chars, URL-safe)
+  const roomId = generateRoomId();
+
+  // Log room creation to analytics DB
+  db.logRoomCreation(ip, roomId);
+
+  // Don't create the room data yet — it starts when first socket connects
+  res.json({ roomId });
+});
+
+// Serve room page for /room/:roomId
+app.get("/room/:roomId", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "room.html"));
+});
+
+// ---------------------------------------------------------------------------
+// Permanent rooms
+// ---------------------------------------------------------------------------
+
+// Settings page for permanent rooms (must be before /p/:slug)
+app.get("/p/:slug/settings", async (req, res) => {
+  if (TESTING_MODE) {
+    const room = testPermanentRooms.get(req.params.slug);
+    if (!room || !room.paid) {
+      return res.status(404).sendFile(path.join(__dirname, "public", "index.html"));
     }
-  });
+    return res.sendFile(path.join(__dirname, "public", "settings.html"));
+  }
 
-  socket.on("remove-sticker", ({ id }) => {
-    const idx = stickers.findIndex((s) => s.id === id);
-    if (idx !== -1 && !stickers[idx].builtin) {
-      const removed = stickers.splice(idx, 1)[0];
-      const filePath = path.join(STICKERS_DIR, path.basename(removed.url));
-      fs.unlink(filePath, () => {});
-      io.emit("stickers", stickers);
+  if (!process.env.DATABASE_URL) {
+    return res.status(404).send("Permanent rooms are not enabled.");
+  }
+  try {
+    const room = await db.getPermanentRoom(req.params.slug);
+    if (!room) {
+      return res.status(404).sendFile(path.join(__dirname, "public", "index.html"));
     }
-  });
+    res.sendFile(path.join(__dirname, "public", "settings.html"));
+  } catch {
+    res.status(500).send("Server error.");
+  }
+});
 
-  socket.on("join-room", ({ room, name }) => {
-    username = name;
-    currentRoom = room;
-
-    socket.join(room);
-
-    if (!rooms.has(room)) {
-      rooms.set(room, []);
+// Serve permanent room page
+app.get("/p/:slug", async (req, res) => {
+  if (TESTING_MODE) {
+    const room = testPermanentRooms.get(req.params.slug);
+    if (!room || !room.paid) {
+      return res.status(404).sendFile(path.join(__dirname, "public", "index.html"));
     }
+    return res.sendFile(path.join(__dirname, "public", "room.html"));
+  }
 
-    // Send chat history to the joining user
-    socket.emit("chat-history", rooms.get(room));
+  if (!process.env.DATABASE_URL) {
+    return res.status(404).send("Permanent rooms are not enabled.");
+  }
+  try {
+    const room = await db.getPermanentRoom(req.params.slug);
+    if (!room) {
+      return res.status(404).sendFile(path.join(__dirname, "public", "index.html"));
+    }
+    res.sendFile(path.join(__dirname, "public", "room.html"));
+  } catch {
+    res.status(500).send("Server error.");
+  }
+});
 
-    // Notify others in the room
-    const joinMsg = {
-      type: "system",
-      text: `${username} joined the room`,
-      timestamp: Date.now(),
-    };
-    rooms.get(room).push(joinMsg);
-    io.to(room).emit("message", joinMsg);
+// Success page after checkout
+app.get("/success", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "success.html"));
+});
 
-    // Send current user count
-    const count = io.sockets.adapter.rooms.get(room)?.size || 0;
-    io.to(room).emit("user-count", count);
-  });
+// Check slug availability
+app.post("/api/permanent-rooms/check-slug", async (req, res) => {
+  const { slug } = req.body;
+  if (!slug || typeof slug !== "string") {
+    return res.status(400).json({ error: "Slug is required." });
+  }
 
-  socket.on("update-name", ({ name }) => {
-    const nextName = `${name || ""}`.trim().slice(0, 30);
-    if (!currentRoom || !username || !nextName || nextName === username) return;
+  const normalized = slug.toLowerCase().trim();
+  if (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(normalized)) {
+    return res.json({ available: false, reason: "Slug must be 3–40 characters, lowercase letters, numbers, and hyphens only." });
+  }
 
-    const previousName = username;
-    username = nextName;
-    socket.emit("name-updated", username);
+  try {
+    const exists = TESTING_MODE
+      ? testPermanentRooms.has(normalized)
+      : await db.slugExists(normalized);
+    res.json({ available: !exists });
+  } catch {
+    res.status(500).json({ error: "Server error." });
+  }
+});
 
-    if (rooms.has(currentRoom)) {
-      for (const msg of rooms.get(currentRoom)) {
-        if (msg.type === "user" && msg.userId === clientId) {
-          msg.name = username;
-        }
+// Create permanent room (after payment)
+app.post("/api/permanent-rooms/create", async (req, res) => {
+  const { session_id, slug, passphrase } = req.body;
+
+  if (!slug || typeof slug !== "string") {
+    return res.status(400).json({ error: "Slug is required." });
+  }
+
+  const normalized = slug.toLowerCase().trim();
+  if (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(normalized)) {
+    return res.status(400).json({ error: "Invalid slug format." });
+  }
+
+  try {
+    // Verify payment (skip in testing mode)
+    if (!TESTING_MODE) {
+      if (!stripe || !session_id) {
+        return res.status(400).json({ error: "Payment verification failed." });
+      }
+
+      const session = await stripe.checkout.sessions.retrieve(session_id);
+      if (session.payment_status !== "paid") {
+        return res.status(402).json({ error: "Payment not completed." });
+      }
+
+      // Check if this session was already used to create a room
+      const existingRoom = await db.getRoomBySessionId(session_id);
+      if (existingRoom) {
+        return res.status(409).json({ error: "This payment has already been used." });
       }
     }
 
-    io.to(currentRoom).emit("name-changed", { userId: clientId, name: username });
-
-    const renameMsg = {
-      type: "system",
-      text: `${previousName} is now known as ${username}`,
-      timestamp: Date.now(),
-    };
-
-    if (rooms.has(currentRoom)) {
-      rooms.get(currentRoom).push(renameMsg);
+    // Check if slug is taken
+    const exists = TESTING_MODE
+      ? testPermanentRooms.has(normalized)
+      : await db.slugExists(normalized);
+    if (exists) {
+      return res.status(409).json({ error: "This slug is already taken." });
     }
-    io.to(currentRoom).emit("message", renameMsg);
+
+    // Hash passphrase if provided
+    let passphraseHash = null;
+    if (passphrase && typeof passphrase === "string" && passphrase.trim().length > 0) {
+      passphraseHash = await bcrypt.hash(passphrase.trim(), 10);
+    }
+
+    if (TESTING_MODE) {
+      testPermanentRooms.set(normalized, {
+        slug: normalized,
+        passphrase_hash: passphraseHash,
+        paid: true,
+      });
+      return res.json({ slug: normalized });
+    }
+
+    // Production: create room in DB (already verified payment above)
+    await db.createPermanentRoom(normalized, passphraseHash, session_id);
+    await db.markPermanentRoomPaid(session_id);
+
+    res.json({ slug: normalized });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ error: "This slug is already taken." });
+    }
+    console.error("Create room error:", err.message);
+    res.status(500).json({ error: "Could not create room." });
+  }
+});
+
+// Authenticate for passphrase-protected rooms
+app.post("/api/permanent-rooms/auth", async (req, res) => {
+  const { slug, passphrase } = req.body;
+  if (!slug) {
+    return res.status(400).json({ error: "Slug is required." });
+  }
+
+  try {
+    const room = TESTING_MODE
+      ? testPermanentRooms.get(slug)
+      : await db.getPermanentRoom(slug);
+
+    if (!room || (TESTING_MODE && !room.paid)) {
+      return res.status(404).json({ error: "Room not found." });
+    }
+
+    if (!room.passphrase_hash) {
+      return res.json({ authenticated: true, hasPassphrase: false });
+    }
+
+    if (!passphrase) {
+      return res.json({ authenticated: false, hasPassphrase: true });
+    }
+
+    const match = await bcrypt.compare(passphrase, room.passphrase_hash);
+    if (!match) {
+      return res.status(401).json({ error: "Wrong codeword." });
+    }
+
+    res.json({ authenticated: true, hasPassphrase: true });
+  } catch {
+    res.status(500).json({ error: "Server error." });
+  }
+});
+
+// Update codeword for a permanent room
+app.post("/api/permanent-rooms/:slug/codeword", async (req, res) => {
+  const { slug } = req.params;
+  const { currentCodeword, newCodeword } = req.body;
+
+  if (!slug) {
+    return res.status(400).json({ error: "Slug is required." });
+  }
+
+  try {
+    const room = TESTING_MODE
+      ? testPermanentRooms.get(slug)
+      : await db.getPermanentRoom(slug);
+
+    if (!room || (TESTING_MODE && !room.paid)) {
+      return res.status(404).json({ error: "Room not found." });
+    }
+
+    // If room has an existing codeword, verify the current one
+    if (room.passphrase_hash) {
+      if (!currentCodeword) {
+        return res.status(401).json({ error: "Current codeword is required." });
+      }
+      const match = await bcrypt.compare(currentCodeword, room.passphrase_hash);
+      if (!match) {
+        return res.status(401).json({ error: "Current codeword is incorrect." });
+      }
+    }
+
+    // Hash new codeword (or set to null to remove it)
+    let newHash = null;
+    if (newCodeword && typeof newCodeword === "string" && newCodeword.trim().length > 0) {
+      newHash = await bcrypt.hash(newCodeword.trim(), 10);
+    }
+
+    if (TESTING_MODE) {
+      room.passphrase_hash = newHash;
+    } else {
+      await db.updateCodeword(slug, newHash);
+    }
+
+    res.json({ updated: true });
+  } catch {
+    res.status(500).json({ error: "Server error." });
+  }
+});
+
+// Delete a permanent room
+app.delete("/api/permanent-rooms/:slug", async (req, res) => {
+  const { slug } = req.params;
+  if (!slug) {
+    return res.status(400).json({ error: "Slug is required." });
+  }
+
+  try {
+    if (TESTING_MODE) {
+      const room = testPermanentRooms.get(slug);
+      if (!room) {
+        return res.status(404).json({ error: "Room not found." });
+      }
+      testPermanentRooms.delete(slug);
+    } else {
+      const room = await db.getPermanentRoom(slug);
+      if (!room) {
+        return res.status(404).json({ error: "Room not found." });
+      }
+      await db.deletePermanentRoom(slug);
+    }
+
+    // Also destroy the in-memory room if it exists
+    const activeRoom = rooms.get(slug);
+    if (activeRoom) {
+      activeRoom.destroyed = true;
+      io.to(slug).emit("room-destroyed");
+      io.in(slug).socketsLeave(slug);
+      setTimeout(() => {
+        rooms.delete(slug);
+      }, 5000);
+    }
+
+    res.json({ deleted: true });
+  } catch {
+    res.status(500).json({ error: "Server error." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Email room link via Brevo
+// ---------------------------------------------------------------------------
+app.post("/api/email-room-link", async (req, res) => {
+  const { email, roomUrl } = req.body;
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    return res.status(400).json({ error: "Valid email is required." });
+  }
+  if (!roomUrl || typeof roomUrl !== "string") {
+    return res.status(400).json({ error: "Room URL is required." });
+  }
+
+  if (TESTING_MODE) {
+    console.log(`[TEST] Email would be sent to ${email} with link ${roomUrl}`);
+    return res.json({ sent: true });
+  }
+
+  if (!BREVO_API_KEY) {
+    return res.status(400).json({ error: "Email is not configured." });
+  }
+
+  try {
+    const payload = JSON.stringify({
+      sender: { name: "ChatOffRecord", email: BREVO_SENDER_EMAIL },
+      to: [{ email: email.trim() }],
+      subject: "Your ChatOffRecord Room Link",
+      htmlContent: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #0f172a; color: #f8fafc; border-radius: 12px;">
+          <h2 style="margin: 0 0 16px;">ChatOffRecord</h2>
+          <p style="color: #94a3b8; margin: 0 0 24px;">Here's your permanent room link. Save this email so you don't lose it.</p>
+          <a href="${roomUrl}" style="display: inline-block; padding: 12px 24px; background: #6366f1; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">${roomUrl}</a>
+          <p style="color: #64748b; font-size: 12px; margin-top: 24px;">This is an automated email from ChatOffRecord. Do not reply.</p>
+        </div>
+      `,
+    });
+
+    const https = require("https");
+    const result = await new Promise((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: "api.brevo.com",
+          path: "/v3/smtp/email",
+          method: "POST",
+          headers: {
+            "api-key": BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+          },
+        },
+        (response) => {
+          let body = "";
+          response.on("data", (chunk) => (body += chunk));
+          response.on("end", () => {
+            if (response.statusCode >= 200 && response.statusCode < 300) {
+              resolve({ ok: true });
+            } else {
+              console.error("Brevo error:", body);
+              resolve({ ok: false });
+            }
+          });
+        }
+      );
+      req.on("error", reject);
+      req.write(payload);
+      req.end();
+    });
+
+    if (!result.ok) {
+      return res.status(500).json({ error: "Could not send email." });
+    }
+
+    res.json({ sent: true });
+  } catch (err) {
+    console.error("Email error:", err.message);
+    res.status(500).json({ error: "Could not send email." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Admin routes
+// ---------------------------------------------------------------------------
+app.get("/admin", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+app.post("/admin/auth", (req, res) => {
+  const { passcode } = req.body;
+  if (passcode !== ADMIN_PASSCODE) {
+    return res.status(401).json({ error: "Invalid passcode." });
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  adminTokens.add(token);
+
+  res.json({ token });
+});
+
+function requireAdmin(req, res, next) {
+  const token = req.headers["x-admin-token"];
+  if (!token || !adminTokens.has(token)) {
+    return res.status(401).json({ error: "Unauthorized." });
+  }
+  next();
+}
+
+app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
+  try {
+    const [visitors, rooms, roomsPerUser, retention, avgTimeOnRoom, linkShares, permanentRooms, funnel, sessions] =
+      await Promise.all([
+        db.getVisitorStats(),
+        db.getRoomStats(),
+        db.getRoomsPerUser(),
+        db.getRetention(),
+        db.getAvgTimeOnRoom(),
+        db.getLinkShareStats(),
+        db.getPermanentRoomStats(),
+        db.getFunnelStats(),
+        db.getSessionList(),
+      ]);
+
+    res.json({ visitors, rooms, roomsPerUser, retention, avgTimeOnRoom, linkShares, permanentRooms, funnel, sessions });
+  } catch (err) {
+    console.error("Analytics query error:", err.message);
+    res.status(500).json({ error: "Failed to fetch analytics." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// WebSocket handling
+// ---------------------------------------------------------------------------
+io.on("connection", (socket) => {
+  let currentRoom = null;
+  let messageTimes = [];
+  let sessionId = null;
+  const socketIp = socket.handshake.headers["x-forwarded-for"] || socket.handshake.address;
+
+  socket.on("join-room", async ({ roomId, displayName, roomType }) => {
+    if (!roomId || typeof roomId !== "string" || roomId.length > 50) {
+      socket.emit("error-msg", "Invalid room ID.");
+      return;
+    }
+
+    const safeName = sanitizeName(displayName);
+    if (!safeName) {
+      socket.emit("error-msg", "Invalid display name.");
+      return;
+    }
+
+    const isPermanent = roomType === "permanent";
+
+    // For permanent rooms, verify the slug exists and is paid
+    if (isPermanent) {
+      try {
+        const pRoom = TESTING_MODE
+          ? testPermanentRooms.get(roomId)
+          : await db.getPermanentRoom(roomId);
+        if (!pRoom || (TESTING_MODE && !pRoom.paid)) {
+          socket.emit("error-msg", "Room not found or payment incomplete.");
+          return;
+        }
+      } catch {
+        socket.emit("error-msg", "Could not verify room.");
+        return;
+      }
+    }
+
+    // Check if room was already destroyed (ephemeral only)
+    const existing = rooms.get(roomId);
+    if (existing && existing.destroyed) {
+      socket.emit("room-destroyed");
+      return;
+    }
+
+    // Create room if it doesn't exist (first joiner starts the timer)
+    if (!existing) {
+      const room = {
+        createdAt: Date.now(),
+        destroyed: false,
+        permanent: isPermanent,
+        sockets: new Map(), // socketId -> displayName
+      };
+
+      // Set self-destruct timer only for ephemeral rooms
+      if (!isPermanent) {
+        room.timer = setTimeout(() => {
+          destroyRoom(roomId);
+        }, ROOM_LIFETIME_MS);
+      }
+
+      rooms.set(roomId, room);
+    }
+
+    const room = rooms.get(roomId);
+    currentRoom = roomId;
+
+    socket.join(roomId);
+    room.sockets.set(socket.id, safeName);
+
+    // Log room session for analytics
+    db.logRoomJoin(socketIp, roomId).then((id) => {
+      sessionId = id;
+    });
+
+    // Send room info to the joining client
+    const remainingMs = room.permanent ? null : ROOM_LIFETIME_MS - (Date.now() - room.createdAt);
+    const users = Array.from(room.sockets.values());
+    socket.emit("room-joined", {
+      remainingMs: room.permanent ? null : Math.max(0, remainingMs),
+      userCount: room.sockets.size,
+      displayName: safeName,
+      roomType: room.permanent ? "permanent" : "ephemeral",
+      users,
+    });
+
+    // Notify others in the room
+    socket.to(roomId).emit("user-joined", {
+      displayName: safeName,
+      userCount: room.sockets.size,
+      users,
+    });
   });
 
-  socket.on("clear-room", () => {
-    if (!currentRoom || !rooms.has(currentRoom)) return;
+  socket.on("chat-message", ({ message }) => {
+    if (!currentRoom) return;
 
-    cleanupRoomFiles(currentRoom);
-    rooms.set(currentRoom, []);
-    io.to(currentRoom).emit("room-cleared");
-  });
+    const room = rooms.get(currentRoom);
+    if (!room || room.destroyed) return;
 
-  socket.on("send-message", (data) => {
-    if (!currentRoom || !username) return;
+    // Rate limit messages
+    const now = Date.now();
+    messageTimes = messageTimes.filter((t) => now - t < 1000);
+    if (messageTimes.length >= RATE_LIMIT_MESSAGES_PER_SECOND) {
+      socket.emit("error-msg", "Slow down! Too many messages.");
+      return;
+    }
+    messageTimes.push(now);
 
-    const msg = {
-      type: "user",
-      userId: clientId,
-      name: username,
-      text: data.text || "",
-      fileUrl: data.fileUrl || null,
-      mediaType: data.mediaType || null,
-      stickerUrl: data.stickerUrl || null,
+    // Validate message
+    if (!message || typeof message !== "string") return;
+    const trimmed = message.trim();
+    if (trimmed.length === 0 || trimmed.length > MAX_MESSAGE_LENGTH) {
+      socket.emit("error-msg", `Message must be 1–${MAX_MESSAGE_LENGTH} characters.`);
+      return;
+    }
+
+    const displayName = room.sockets.get(socket.id) || "Anonymous";
+
+    // PRIVACY NOTE: We broadcast the message but do NOT store or log it.
+    // We only log a count (no content, no sender) for analytics.
+    db.logMessage(currentRoom);
+    io.to(currentRoom).emit("chat-message", {
+      displayName,
+      message: trimmed,
       timestamp: Date.now(),
-    };
-    rooms.get(currentRoom).push(msg);
-    io.to(currentRoom).emit("message", msg);
+      senderId: socket.id,
+    });
+  });
+
+  socket.on("chat-media", ({ dataUrl, mediaType }) => {
+    if (!currentRoom) return;
+
+    const room = rooms.get(currentRoom);
+    if (!room || room.destroyed) return;
+
+    // Rate limit (shared with text messages)
+    const now = Date.now();
+    messageTimes = messageTimes.filter((t) => now - t < 1000);
+    if (messageTimes.length >= RATE_LIMIT_MESSAGES_PER_SECOND) {
+      socket.emit("error-msg", "Slow down! Too many messages.");
+      return;
+    }
+    messageTimes.push(now);
+
+    // Validate
+    if (!dataUrl || typeof dataUrl !== "string") return;
+    if (!mediaType || !["image", "video"].includes(mediaType)) return;
+
+    // Check size (base64 data URL: ~4/3 of original, so check the string length)
+    const sizeEstimate = Math.ceil((dataUrl.length * 3) / 4);
+    if (sizeEstimate > MAX_MEDIA_BYTES) {
+      socket.emit("error-msg", "File is too large. Maximum size is 200 MB.");
+      return;
+    }
+
+    const displayName = room.sockets.get(socket.id) || "Anonymous";
+
+    // PRIVACY NOTE: We broadcast the media but do NOT store or log it.
+    // We only log a count (no content, no sender) for analytics.
+    db.logMessage(currentRoom);
+    io.to(currentRoom).emit("chat-media", {
+      displayName,
+      dataUrl,
+      mediaType,
+      timestamp: Date.now(),
+      senderId: socket.id,
+    });
+  });
+
+  socket.on("link-share", () => {
+    if (!currentRoom) return;
+    db.logLinkShare(socketIp, currentRoom);
   });
 
   socket.on("disconnect", () => {
-    if (!currentRoom || !username) return;
+    // Log session end
+    db.logRoomLeave(sessionId);
 
-    const leaveMsg = {
-      type: "system",
-      text: `${username} left the room`,
-      timestamp: Date.now(),
-    };
+    if (!currentRoom) return;
 
-    if (rooms.has(currentRoom)) {
-      rooms.get(currentRoom).push(leaveMsg);
-    }
-    io.to(currentRoom).emit("message", leaveMsg);
+    const room = rooms.get(currentRoom);
+    if (!room) return;
 
-    const count = io.sockets.adapter.rooms.get(currentRoom)?.size || 0;
-    io.to(currentRoom).emit("user-count", count);
+    const displayName = room.sockets.get(socket.id) || "Anonymous";
+    room.sockets.delete(socket.id);
 
-    // Clean up empty rooms
-    if (count === 0) {
-      cleanupRoomFiles(currentRoom);
-      rooms.delete(currentRoom);
+    if (!room.destroyed) {
+      io.to(currentRoom).emit("user-left", {
+        displayName,
+        userCount: room.sockets.size,
+        users: Array.from(room.sockets.values()),
+      });
+
+      // For permanent rooms, clean up in-memory data when all users leave
+      // The slug stays valid in DB — room will be recreated when someone joins again
+      if (room.permanent && room.sockets.size === 0) {
+        rooms.delete(currentRoom);
+      }
     }
   });
 });
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// ---------------------------------------------------------------------------
+// Room destruction
+// ---------------------------------------------------------------------------
+function destroyRoom(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  room.destroyed = true;
+  clearTimeout(room.timer);
+
+  // Notify all connected clients
+  io.to(roomId).emit("room-destroyed");
+
+  // Disconnect all sockets from the room
+  io.in(roomId).socketsLeave(roomId);
+
+  // Remove room from memory after a short delay (let clients receive the event)
+  setTimeout(() => {
+    rooms.delete(roomId);
+  }, 5000);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function generateRoomId() {
+  const chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let id = "";
+  for (let i = 0; i < 10; i++) {
+    id += chars[Math.floor(Math.random() * chars.length)];
+  }
+  // Ensure uniqueness
+  if (rooms.has(id)) return generateRoomId();
+  return id;
+}
+
+function sanitizeName(name) {
+  if (!name || typeof name !== "string") return null;
+  const trimmed = name.trim().slice(0, 30);
+  // Allow letters, numbers, spaces, underscores, hyphens
+  const safe = trimmed.replace(/[^a-zA-Z0-9 _\-]/g, "");
+  return safe.length > 0 ? safe : null;
+}
+
+// ---------------------------------------------------------------------------
+// Periodic cleanup of stale rate-limit data
+// ---------------------------------------------------------------------------
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, timestamps] of roomCreationLog) {
+    const recent = timestamps.filter((t) => now - t < 60_000);
+    if (recent.length === 0) {
+      roomCreationLog.delete(ip);
+    } else {
+      roomCreationLog.set(ip, recent);
+    }
+  }
+}, 60_000);
+
+// ---------------------------------------------------------------------------
+// Periodic cleanup of stale unpaid permanent room reservations
+// ---------------------------------------------------------------------------
+setInterval(() => {
+  db.cleanupUnpaidRooms().catch(() => {});
+}, 15 * 60_000);
+
+// ---------------------------------------------------------------------------
+// Start server (initialize DB first)
+// ---------------------------------------------------------------------------
+async function start() {
+  if (process.env.DATABASE_URL) {
+    try {
+      await db.initDb();
+      console.log("Analytics database initialized.");
+    } catch (err) {
+      console.warn("Could not connect to analytics DB:", err.message);
+      console.warn("Analytics will be disabled. Set DATABASE_URL to enable.");
+    }
+  } else {
+    console.log("No DATABASE_URL set — analytics disabled.");
+  }
+
+  server.listen(PORT, () => {
+    console.log(`ChatOffRecord running on http://localhost:${PORT}`);
+    if (TESTING_MODE) {
+      console.log("TESTING MODE enabled — payments are bypassed, permanent rooms use in-memory storage.");
+    }
+  });
+}
+
+start();

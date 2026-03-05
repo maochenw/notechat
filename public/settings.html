@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Room Settings — Chat Off Record</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <!-- Settings UI -->
+  <div id="settings-ui" class="settings-container hidden">
+    <header class="settings-header">
+      <a id="back-link" class="settings-back" href="/">Back to Room</a>
+      <h1 class="settings-title">Room Settings</h1>
+    </header>
+
+    <div class="settings-content">
+      <!-- Email Link Section -->
+      <section class="settings-section">
+        <h2 class="settings-section-title">Email Room Link</h2>
+        <p class="settings-section-desc">Send the room link to your email so you don't lose it.</p>
+        <input
+          type="email"
+          id="email-input"
+          class="admin-input"
+          placeholder="your@email.com"
+          autocomplete="email"
+        />
+        <button id="btn-send-email" class="btn-primary" style="width:100%;margin-top:12px;">Send Link</button>
+        <p id="email-status" class="hidden" style="margin-top:10px;font-size:0.85rem;"></p>
+      </section>
+
+      <!-- Codeword Section (only shown if room has no codeword) -->
+      <section id="codeword-section" class="settings-section">
+        <h2 class="settings-section-title">Codeword</h2>
+        <p id="codeword-desc" class="settings-section-desc">Set a codeword to protect your room.</p>
+
+        <label class="settings-label">Codeword</label>
+        <div class="codeword-row">
+          <input
+            type="password"
+            id="new-codeword"
+            class="admin-input"
+            placeholder="Enter codeword"
+            autocomplete="off"
+          />
+          <button type="button" class="btn-toggle-vis toggle-new" title="Show codeword">
+            <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+        <button id="btn-save-codeword" class="btn-primary" style="width:100%;margin-top:12px;">Save Codeword</button>
+        <p id="codeword-status" class="hidden" style="margin-top:10px;font-size:0.85rem;"></p>
+      </section>
+
+      <!-- Delete Room Section -->
+      <section class="settings-section settings-section-danger">
+        <h2 class="settings-section-title" style="color:var(--danger);">Danger Zone</h2>
+        <p class="settings-section-desc">Permanently delete this room. This action cannot be undone.</p>
+        <button id="btn-delete" class="btn-danger" style="width:100%;">Permanently Delete Room</button>
+      </section>
+    </div>
+  </div>
+
+  <!-- Delete confirmation modal -->
+  <div id="delete-modal" class="overlay hidden">
+    <div class="landing-card">
+      <h1 class="logo">Chat Off Record</h1>
+      <p class="destroyed-text">Are you sure you want to permanently delete this room? This cannot be undone.</p>
+      <div class="confirm-actions">
+        <button id="btn-confirm-delete" class="btn-danger">Yes, Delete Forever</button>
+        <button id="btn-cancel-delete" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/settings.js"></script>
+</body>
+</html>
