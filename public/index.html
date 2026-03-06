@@ -374,6 +374,7 @@
       line-height: 1.45;
       word-wrap: break-word;
       overflow-wrap: break-word;
+      position: relative;
     }
     .msg.system {
       align-self: center;
@@ -405,6 +406,57 @@
       color: #a5b4fc;
       margin-bottom: 2px;
     }
+    .msg .reply-trigger {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(15, 23, 42, .45);
+      border: 1px solid rgba(148, 163, 184, .45);
+      color: #cbd5e1;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      font-size: .72rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .msg .reply-trigger:hover {
+      border-color: #94a3b8;
+      color: #f8fafc;
+    }
+    .msg .reply-quote {
+      border-left: 2px solid rgba(99, 102, 241, .8);
+      background: rgba(15, 23, 42, .28);
+      border-radius: 6px;
+      padding: .35rem .45rem;
+      margin-bottom: .35rem;
+      display: flex;
+      align-items: center;
+      gap: .45rem;
+    }
+    .msg .reply-quote .reply-thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid rgba(148, 163, 184, .35);
+    }
+    .msg .reply-quote .reply-body {
+      min-width: 0;
+      flex: 1;
+    }
+    .msg .reply-quote .reply-author {
+      font-size: .68rem;
+      font-weight: 600;
+      color: #a5b4fc;
+      margin-bottom: 2px;
+    }
+    .msg .reply-quote .reply-text {
+      font-size: .74rem;
+      color: rgba(248, 250, 252, .9);
+      word-break: break-word;
+    }
     .msg.self .author { color: rgba(255,255,255,.7); }
     .msg.sticker-msg.self .author { color: #a5b4fc; }
     .msg .time {
@@ -413,6 +465,15 @@
       margin-top: 2px;
       text-align: right;
     }
+    .msg .seen-indicator {
+      font-size: .62rem;
+      color: rgba(248, 250, 252, .65);
+      margin-top: 2px;
+      text-align: right;
+      min-height: .8rem;
+      opacity: 0;
+    }
+    .msg .seen-indicator.active { opacity: 1; }
     .msg.other .time { color: #64748b; }
     .msg.sticker-msg .time { color: #64748b; }
 
@@ -551,6 +612,40 @@
       min-width: 0;
     }
     .file-preview .remove-btn {
+      background: none;
+      border: none;
+      color: #ef4444;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: .25rem;
+    }
+    .reply-preview {
+      display: none;
+      padding: .5rem 1rem;
+      background: #1e293b;
+      border-top: 1px solid #334155;
+      align-items: center;
+      gap: .65rem;
+      flex-shrink: 0;
+    }
+    .reply-preview.active { display: flex; }
+    .reply-preview .reply-meta {
+      min-width: 0;
+      flex: 1;
+    }
+    .reply-preview .reply-label {
+      font-size: .72rem;
+      color: #94a3b8;
+      margin-bottom: 2px;
+    }
+    .reply-preview .reply-snippet {
+      font-size: .82rem;
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .reply-preview .remove-btn {
       background: none;
       border: none;
       color: #ef4444;
@@ -704,6 +799,13 @@
       <span class="file-name" id="file-name"></span>
       <button class="remove-btn" id="remove-file">&times;</button>
     </div>
+    <div class="reply-preview" id="reply-preview">
+      <div class="reply-meta">
+        <div class="reply-label">Replying to</div>
+        <div class="reply-snippet" id="reply-snippet"></div>
+      </div>
+      <button class="remove-btn" id="clear-reply">&times;</button>
+    </div>
     <div class="chat-input">
       <button class="icon-btn" id="attach-btn" title="Attach photo or video">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -771,6 +873,9 @@
     const fileThumb    = document.getElementById("file-thumb");
     const fileName     = document.getElementById("file-name");
     const removeFile   = document.getElementById("remove-file");
+    const replyPreview = document.getElementById("reply-preview");
+    const replySnippet = document.getElementById("reply-snippet");
+    const clearReplyBtn = document.getElementById("clear-reply");
     const lightbox     = document.getElementById("lightbox");
     const lightboxImg  = document.getElementById("lightbox-img");
     const schedRoom    = document.getElementById("sched-room");
@@ -788,7 +893,30 @@
     let myName = "";
     let currentRoomId = "";
     let pendingFile = null;
+    let pendingReply = null;
     let currentStickers = [];
+    const messagesById = new Map();
+    const SEEN_DWELL_MS = 500;
+    const seenAcked = new Set();
+    const seenTimers = new Map();
+    const seenIntersecting = new Set();
+
+    const seenObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const messageId = entry.target.dataset.msgId;
+        if (!messageId || seenAcked.has(messageId)) return;
+
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+          seenIntersecting.add(messageId);
+          if (document.visibilityState === "visible") {
+            scheduleSeenMark(messageId);
+          }
+        } else {
+          seenIntersecting.delete(messageId);
+          cancelSeenMark(messageId);
+        }
+      });
+    }, { root: messagesEl, threshold: [0.6] });
 
     function formatTime(ts) {
       return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -807,6 +935,70 @@
       return `<img src="${mediaUrl}" alt="shared image" onclick="openLightbox('${mediaUrl}')">`;
     }
 
+    function summarizeReply(msg) {
+      if (!msg) return "[Message]";
+      if (msg.text) return msg.text;
+      if (msg.stickerUrl) return "[Sticker]";
+      if (msg.mediaType === "video") return "[Video]";
+      if (msg.fileUrl) return "[Image]";
+      return "[Message]";
+    }
+
+    function renderReplyQuote(replyTo) {
+      if (!replyTo) return "";
+      const thumbUrl = replyTo.stickerUrl ? withTab(replyTo.stickerUrl) : "";
+      return (
+        `<div class="reply-quote">` +
+          (thumbUrl ? `<img class="reply-thumb" src="${thumbUrl}" alt="sticker reply">` : "") +
+          `<div class="reply-body">` +
+            `<div class="reply-author">${escapeHtml(replyTo.name || "Unknown")}</div>` +
+            `<div class="reply-text">${escapeHtml(summarizeReply(replyTo))}</div>` +
+          `</div>` +
+        `</div>`
+      );
+    }
+
+    function seenLabel(count) {
+      const n = Number(count) || 0;
+      if (n <= 0) return "";
+      return `Seen by ${n}`;
+    }
+
+    function cancelSeenMark(messageId) {
+      const timer = seenTimers.get(messageId);
+      if (!timer) return;
+      clearTimeout(timer);
+      seenTimers.delete(messageId);
+    }
+
+    function scheduleSeenMark(messageId) {
+      if (!messageId || seenAcked.has(messageId) || seenTimers.has(messageId)) return;
+      const timer = setTimeout(() => {
+        seenTimers.delete(messageId);
+        if (document.visibilityState !== "visible" || !seenIntersecting.has(messageId)) return;
+        seenAcked.add(messageId);
+        socket.emit("mark-seen", { messageId });
+      }, SEEN_DWELL_MS);
+      seenTimers.set(messageId, timer);
+    }
+
+    function trackSeenCandidate(msg, element) {
+      if (msg.type !== "user" || !msg.id || msg.userId === tabToken) return;
+      if (Array.isArray(msg.seenBy) && msg.seenBy.includes(tabToken)) {
+        seenAcked.add(msg.id);
+        return;
+      }
+      seenObserver.observe(element);
+    }
+
+    function resetSeenTracking() {
+      seenObserver.disconnect();
+      seenIntersecting.clear();
+      seenAcked.clear();
+      seenTimers.forEach((timerId) => clearTimeout(timerId));
+      seenTimers.clear();
+    }
+
     function openLightbox(src) {
       lightboxImg.src = src;
       lightbox.classList.add("active");
@@ -819,6 +1011,10 @@
     function appendMessage(msg) {
       const div = document.createElement("div");
       div.classList.add("msg");
+      if (msg.id) {
+        div.dataset.msgId = msg.id;
+        messagesById.set(msg.id, msg);
+      }
 
       if (msg.type === "system") {
         div.classList.add("system");
@@ -832,20 +1028,60 @@
 
         if (msg.stickerUrl) {
           const stickerUrl = withTab(msg.stickerUrl);
+          const seenCount = Math.max(0, (Array.isArray(msg.seenBy) ? msg.seenBy.length : 1) - 1);
           div.classList.add("sticker-msg");
           div.innerHTML =
+            renderReplyQuote(msg.replyTo) +
             `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>` +
-            `<img class="sticker-img" src="${stickerUrl}" alt="sticker">`;
+            `<img class="sticker-img" src="${stickerUrl}" alt="sticker">` +
+            (isSelf && msg.id ? `<div class="seen-indicator ${seenCount > 0 ? "active" : ""}" data-seen-for="${msg.id}">${seenLabel(seenCount)}</div>` : "") +
+            (msg.id ? `<button class="reply-trigger" type="button" data-msg-id="${msg.id}" title="Reply">&#8617;</button>` : "");
         } else {
-          let content = `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>`;
+          const seenCount = Math.max(0, (Array.isArray(msg.seenBy) ? msg.seenBy.length : 1) - 1);
+          let content = renderReplyQuote(msg.replyTo);
+          content += `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>`;
           if (msg.text) content += `<div>${escapeHtml(msg.text)}</div>`;
           content += renderMedia(msg);
+          if (isSelf && msg.id) {
+            content += `<div class="seen-indicator ${seenCount > 0 ? "active" : ""}" data-seen-for="${msg.id}">${seenLabel(seenCount)}</div>`;
+          }
+          if (msg.id) {
+            content += `<button class="reply-trigger" type="button" data-msg-id="${msg.id}" title="Reply">&#8617;</button>`;
+          }
           div.innerHTML = content;
         }
       }
 
+      const replyBtn = div.querySelector(".reply-trigger");
+      if (replyBtn) {
+        replyBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const target = messagesById.get(replyBtn.dataset.msgId);
+          if (!target) return;
+          pendingReply = {
+            id: target.id,
+            name: target.name || "Unknown",
+            text: target.text || "",
+            stickerUrl: target.stickerUrl || null,
+            fileUrl: target.fileUrl || null,
+            mediaType: target.mediaType || null,
+          };
+          replySnippet.textContent = `${pendingReply.name}: ${summarizeReply(pendingReply)}`;
+          replyPreview.classList.add("active");
+        });
+      }
+
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+      trackSeenCandidate(msg, div);
+    }
+
+    function updateSeenIndicator(messageId, seenCount) {
+      const el = messagesEl.querySelector(`.seen-indicator[data-seen-for="${messageId}"]`);
+      if (!el) return;
+      const label = seenLabel(seenCount);
+      el.textContent = label;
+      el.classList.toggle("active", !!label);
     }
 
     function updateRenderedDisplayName(userId, name) {
@@ -859,6 +1095,12 @@
     function syncDisplayName(name) {
       myName = name;
       nameInput.value = name;
+    }
+
+    function clearPendingReply() {
+      pendingReply = null;
+      replySnippet.textContent = "";
+      replyPreview.classList.remove("active");
     }
 
     function submitDisplayNameChange() {
@@ -883,6 +1125,9 @@
       joinScreen.style.display = "none";
       chatScreen.style.display = "flex";
       messagesEl.innerHTML = "";
+      messagesById.clear();
+      clearPendingReply();
+      resetSeenTracking();
 
       socket.emit("join-room", { room, name });
       msgInput.focus();
@@ -892,6 +1137,7 @@
     roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
     nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") roomInput.focus(); });
     updateNameBtn.addEventListener("click", submitDisplayNameChange);
+    clearReplyBtn.addEventListener("click", clearPendingReply);
     clearRoomBtn.addEventListener("click", () => {
       if (!currentRoomId) return;
       if (!window.confirm("Clear all messages in this room?")) return;
@@ -965,12 +1211,24 @@
         clearPendingFile();
       }
 
-      socket.emit("send-message", { text, fileUrl, mediaType });
+      const payload = { text, fileUrl, mediaType };
+      if (pendingReply?.id) {
+        payload.replyToId = pendingReply.id;
+      }
+      socket.emit("send-message", payload);
       msgInput.value = "";
+      clearPendingReply();
     }
 
     sendBtn.addEventListener("click", sendMessage);
     msgInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        seenIntersecting.forEach((messageId) => scheduleSeenMark(messageId));
+        return;
+      }
+      seenTimers.forEach((_timerId, messageId) => cancelSeenMark(messageId));
+    });
 
     socket.on("connect", () => {
       if (!currentRoomId || !myName || chatScreen.style.display !== "flex") return;
@@ -981,13 +1239,24 @@
     socket.on("chat-history", (history) => { history.forEach(appendMessage); });
     socket.on("room-cleared", () => {
       messagesEl.innerHTML = "";
+      messagesById.clear();
+      clearPendingReply();
+      resetSeenTracking();
     });
     socket.on("name-updated", syncDisplayName);
     socket.on("name-changed", ({ userId, name }) => {
       updateRenderedDisplayName(userId, name);
+      messagesById.forEach((msg) => {
+        if (msg.userId === userId) {
+          msg.name = name;
+        }
+      });
       if (userId === tabToken) {
         syncDisplayName(name);
       }
+    });
+    socket.on("message-seen", ({ messageId, seenCount }) => {
+      updateSeenIndicator(messageId, seenCount);
     });
     socket.on("user-count", (count) => { userCount.textContent = ` · ${count} online`; });
 
@@ -1126,7 +1395,12 @@
 
       stickerPickerGrid.querySelectorAll(".sticker-pick").forEach((img) => {
         img.addEventListener("click", () => {
-          socket.emit("send-message", { text: "", stickerUrl: img.dataset.url });
+          const payload = { text: "", stickerUrl: img.dataset.url };
+          if (pendingReply?.id) {
+            payload.replyToId = pendingReply.id;
+          }
+          socket.emit("send-message", payload);
+          clearPendingReply();
           stickerPicker.classList.remove("active");
           stickerBtn.classList.remove("active");
         });

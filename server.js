@@ -269,6 +269,7 @@ io.on("connection", (socket) => {
 
     // Notify others in the room
     const joinMsg = {
+      id: crypto.randomUUID(),
       type: "system",
       text: `${username} joined the room`,
       timestamp: Date.now(),
@@ -300,6 +301,7 @@ io.on("connection", (socket) => {
     io.to(currentRoom).emit("name-changed", { userId: clientId, name: username });
 
     const renameMsg = {
+      id: crypto.randomUUID(),
       type: "system",
       text: `${previousName} is now known as ${username}`,
       timestamp: Date.now(),
@@ -322,7 +324,24 @@ io.on("connection", (socket) => {
   socket.on("send-message", (data) => {
     if (!currentRoom || !username) return;
 
+    let replyTo = null;
+    const replyToId = `${data.replyToId || ""}`.trim();
+    if (replyToId && rooms.has(currentRoom)) {
+      const original = rooms.get(currentRoom).find((m) => m.id === replyToId);
+      if (original) {
+        replyTo = {
+          id: original.id,
+          name: original.name || "System",
+          text: original.text || "",
+          fileUrl: original.fileUrl || null,
+          mediaType: original.mediaType || null,
+          stickerUrl: original.stickerUrl || null,
+        };
+      }
+    }
+
     const msg = {
+      id: crypto.randomUUID(),
       type: "user",
       userId: clientId,
       name: username,
@@ -330,16 +349,36 @@ io.on("connection", (socket) => {
       fileUrl: data.fileUrl || null,
       mediaType: data.mediaType || null,
       stickerUrl: data.stickerUrl || null,
+      replyTo,
+      seenBy: [clientId],
       timestamp: Date.now(),
     };
     rooms.get(currentRoom).push(msg);
     io.to(currentRoom).emit("message", msg);
   });
 
+  socket.on("mark-seen", ({ messageId }) => {
+    const id = `${messageId || ""}`.trim();
+    if (!currentRoom || !id || !rooms.has(currentRoom)) return;
+
+    const msg = rooms.get(currentRoom).find((m) => m.id === id && m.type === "user");
+    if (!msg) return;
+
+    if (!Array.isArray(msg.seenBy)) {
+      msg.seenBy = [msg.userId].filter(Boolean);
+    }
+    if (msg.seenBy.includes(clientId)) return;
+
+    msg.seenBy.push(clientId);
+    const seenCount = Math.max(0, msg.seenBy.length - 1);
+    io.to(currentRoom).emit("message-seen", { messageId: id, seenCount });
+  });
+
   socket.on("disconnect", () => {
     if (!currentRoom || !username) return;
 
     const leaveMsg = {
+      id: crypto.randomUUID(),
       type: "system",
       text: `${username} left the room`,
       timestamp: Date.now(),
