@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ADHD Self-Assessment Screening</title>
+  <style>
+    :root {
+      --primary: #6C5CE7;
+      --primary-light: #A29BFE;
+      --primary-dark: #4A3CB5;
+      --accent: #FD79A8;
+      --bg: #F8F9FE;
+      --card: #FFFFFF;
+      --text: #2D3436;
+      --text-light: #636E72;
+      --border: #DFE6E9;
+      --success: #00B894;
+      --warning: #FDCB6E;
+      --danger: #E17055;
+      --shadow: 0 4px 20px rgba(108, 92, 231, 0.1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      padding: 40px 0 32px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    header p {
+      color: var(--text-light);
+      font-size: 1.05rem;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    /* Progress bar */
+    .progress-container {
+      background: var(--border);
+      border-radius: 100px;
+      height: 8px;
+      margin: 28px 0 12px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      border-radius: 100px;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    .progress-label {
+      text-align: right;
+      font-size: 0.85rem;
+      color: var(--text-light);
+      margin-bottom: 24px;
+    }
+
+    /* Disclaimer */
+    .disclaimer {
+      background: linear-gradient(135deg, #FFF3E0, #FFF8E1);
+      border-left: 4px solid var(--warning);
+      padding: 16px 20px;
+      border-radius: 0 12px 12px 0;
+      margin-bottom: 28px;
+      font-size: 0.9rem;
+      color: #6D5200;
+    }
+
+    .disclaimer strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 32px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+      transition: transform 0.2s;
+    }
+
+    .card.active {
+      border-color: var(--primary-light);
+    }
+
+    /* Question */
+    .question-number {
+      display: inline-block;
+      background: var(--primary);
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 100px;
+      margin-bottom: 12px;
+    }
+
+    .question-category {
+      display: inline-block;
+      background: #F0EDFF;
+      color: var(--primary);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 100px;
+      margin-left: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .question-text {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    /* Options */
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .option {
+      display: flex;
+      align-items: center;
+      padding: 14px 18px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.95rem;
+    }
+
+    .option:hover {
+      border-color: var(--primary-light);
+      background: #F8F6FF;
+    }
+
+    .option.selected {
+      border-color: var(--primary);
+      background: #F0EDFF;
+    }
+
+    .option input[type="radio"] {
+      display: none;
+    }
+
+    .radio-custom {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      margin-right: 12px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .option.selected .radio-custom {
+      border-color: var(--primary);
+      background: var(--primary);
+    }
+
+    .option.selected .radio-custom::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+    }
+
+    /* Navigation */
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 28px;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 14px 32px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text-light);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #CDD3D6;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      margin-left: auto;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    /* Intro screen */
+    .intro {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .intro h2 {
+      font-size: 1.4rem;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+
+    .intro p {
+      color: var(--text-light);
+      margin-bottom: 12px;
+      font-size: 0.95rem;
+    }
+
+    .intro ul {
+      text-align: left;
+      list-style: none;
+      margin: 20px 0;
+    }
+
+    .intro ul li {
+      padding: 8px 0;
+      padding-left: 28px;
+      position: relative;
+      color: var(--text-light);
+    }
+
+    .intro ul li::before {
+      content: '\2713';
+      position: absolute;
+      left: 0;
+      color: var(--success);
+      font-weight: 700;
+    }
+
+    .btn-start {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      padding: 16px 48px;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+      margin-top: 16px;
+    }
+
+    .btn-start:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(108, 92, 231, 0.3);
+    }
+
+    /* Results */
+    .results {
+      text-align: center;
+    }
+
+    .results h2 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+
+    .score-circle {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 24px auto;
+      border: 6px solid;
+    }
+
+    .score-circle .score-value {
+      font-size: 2.4rem;
+      font-weight: 700;
+    }
+
+    .score-circle .score-max {
+      font-size: 0.85rem;
+      opacity: 0.7;
+    }
+
+    .score-low {
+      border-color: var(--success);
+      color: var(--success);
+      background: #E6FAF5;
+    }
+
+    .score-moderate {
+      border-color: var(--warning);
+      color: #D4A017;
+      background: #FFF8E1;
+    }
+
+    .score-high {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: #FFEEE8;
+    }
+
+    .result-label {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .result-description {
+      color: var(--text-light);
+      max-width: 500px;
+      margin: 0 auto 24px;
+      font-size: 0.95rem;
+    }
+
+    .breakdown {
+      text-align: left;
+      margin: 24px 0;
+    }
+
+    .breakdown h3 {
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+
+    .breakdown-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .breakdown-item:last-child {
+      border-bottom: none;
+    }
+
+    .breakdown-label {
+      font-weight: 500;
+    }
+
+    .breakdown-bar-container {
+      width: 120px;
+      height: 8px;
+      background: var(--border);
+      border-radius: 100px;
+      margin: 0 16px;
+      flex-shrink: 0;
+    }
+
+    .breakdown-bar {
+      height: 100%;
+      border-radius: 100px;
+      background: var(--primary);
+      transition: width 0.6s ease;
+    }
+
+    .breakdown-score {
+      font-weight: 600;
+      color: var(--primary);
+      min-width: 40px;
+      text-align: right;
+    }
+
+    .result-note {
+      background: linear-gradient(135deg, #E8F5E9, #F1F8E9);
+      border-left: 4px solid var(--success);
+      padding: 16px 20px;
+      border-radius: 0 12px 12px 0;
+      text-align: left;
+      font-size: 0.9rem;
+      color: #2E5E2E;
+      margin-top: 24px;
+    }
+
+    .btn-restart {
+      background: var(--primary);
+      color: white;
+      padding: 14px 36px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+      margin-top: 20px;
+    }
+
+    .btn-restart:hover {
+      background: var(--primary-dark);
+    }
+
+    /* Animations */
+    .fade-in {
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .container {
+        padding: 16px 14px 40px;
+      }
+
+      header h1 {
+        font-size: 1.6rem;
+      }
+
+      .card {
+        padding: 24px 20px;
+      }
+
+      .question-text {
+        font-size: 1rem;
+      }
+
+      .btn {
+        padding: 12px 20px;
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>ADHD Self-Assessment</h1>
+    <p>A screening questionnaire based on the WHO Adult ADHD Self-Report Scale (ASRS v1.1)</p>
+  </header>
+
+  <div id="app"></div>
+</div>
+
+<script>
+const questions = [
+  {
+    id: 1,
+    category: "Inattention",
+    text: "How often do you have trouble wrapping up the final details of a project, once the challenging parts have been done?",
+    part: 1
+  },
+  {
+    id: 2,
+    category: "Inattention",
+    text: "How often do you have difficulty getting things in order when you have to do a task that requires organization?",
+    part: 1
+  },
+  {
+    id: 3,
+    category: "Inattention",
+    text: "How often do you have problems remembering appointments or obligations?",
+    part: 1
+  },
+  {
+    id: 4,
+    category: "Inattention",
+    text: "When you have a task that requires a lot of thought, how often do you avoid or delay getting started?",
+    part: 1
+  },
+  {
+    id: 5,
+    category: "Hyperactivity",
+    text: "How often do you fidget or squirm with your hands or feet when you have to sit down for a long time?",
+    part: 1
+  },
+  {
+    id: 6,
+    category: "Hyperactivity",
+    text: "How often do you feel overly active and compelled to do things, like you were driven by a motor?",
+    part: 1
+  },
+  {
+    id: 7,
+    category: "Inattention",
+    text: "How often do you make careless mistakes when you have to work on a boring or difficult project?",
+    part: 2
+  },
+  {
+    id: 8,
+    category: "Inattention",
+    text: "How often do you have difficulty keeping your attention when you are doing boring or repetitive work?",
+    part: 2
+  },
+  {
+    id: 9,
+    category: "Inattention",
+    text: "How often do you have difficulty concentrating on what people say to you, even when they are speaking to you directly?",
+    part: 2
+  },
+  {
+    id: 10,
+    category: "Inattention",
+    text: "How often do you misplace or have difficulty finding things at home or at work?",
+    part: 2
+  },
+  {
+    id: 11,
+    category: "Inattention",
+    text: "How often are you distracted by activity or noise around you?",
+    part: 2
+  },
+  {
+    id: 12,
+    category: "Hyperactivity",
+    text: "How often do you leave your seat in meetings or other situations in which you are expected to remain seated?",
+    part: 2
+  },
+  {
+    id: 13,
+    category: "Hyperactivity",
+    text: "How often do you feel restless or fidgety?",
+    part: 2
+  },
+  {
+    id: 14,
+    category: "Hyperactivity",
+    text: "How often do you have difficulty unwinding and relaxing when you have time to yourself?",
+    part: 2
+  },
+  {
+    id: 15,
+    category: "Hyperactivity",
+    text: "How often do you find yourself talking too much when you are in social situations?",
+    part: 2
+  },
+  {
+    id: 16,
+    category: "Impulsivity",
+    text: "When you\u2019re in a conversation, how often do you find yourself finishing the sentences of the people you are talking to before they can finish them themselves?",
+    part: 2
+  },
+  {
+    id: 17,
+    category: "Impulsivity",
+    text: "How often do you have difficulty waiting your turn in situations when turn-taking is required?",
+    part: 2
+  },
+  {
+    id: 18,
+    category: "Impulsivity",
+    text: "How often do you interrupt others when they are busy?",
+    part: 2
+  }
+];
+
+const optionLabels = ["Never", "Rarely", "Sometimes", "Often", "Very Often"];
+
+let currentQuestion = -1; // -1 = intro
+let answers = {};
+
+function render() {
+  const app = document.getElementById('app');
+
+  if (currentQuestion === -1) {
+    renderIntro(app);
+  } else if (currentQuestion >= questions.length) {
+    renderResults(app);
+  } else {
+    renderQuestion(app);
+  }
+}
+
+function renderIntro(app) {
+  app.innerHTML = `
+    <div class="disclaimer">
+      <strong>Important Disclaimer</strong>
+      This is a screening tool, not a diagnosis. Only a qualified healthcare professional can diagnose ADHD. This questionnaire is meant to help you decide whether to seek professional evaluation.
+    </div>
+    <div class="card fade-in">
+      <div class="intro">
+        <h2>About This Screening</h2>
+        <p>This questionnaire is based on the World Health Organization's Adult ADHD Self-Report Scale (ASRS v1.1), a widely used screening instrument for adult ADHD.</p>
+        <ul>
+          <li>18 questions covering inattention, hyperactivity, and impulsivity</li>
+          <li>Takes approximately 3-5 minutes to complete</li>
+          <li>Your answers are not stored or shared anywhere</li>
+          <li>Provides a score breakdown by symptom category</li>
+        </ul>
+        <p>Answer each question based on how you have felt and behaved <strong>over the past 6 months</strong>.</p>
+        <button class="btn-start" onclick="startQuiz()">Begin Assessment</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderQuestion(app) {
+  const q = questions[currentQuestion];
+  const progress = ((currentQuestion + 1) / questions.length) * 100;
+  const selected = answers[q.id];
+
+  app.innerHTML = `
+    <div class="progress-container">
+      <div class="progress-bar" style="width: ${progress}%"></div>
+    </div>
+    <div class="progress-label">Question ${currentQuestion + 1} of ${questions.length}</div>
+    <div class="card active fade-in">
+      <span class="question-number">Q${currentQuestion + 1}</span>
+      <span class="question-category">${q.category}</span>
+      <p class="question-text">${q.text}</p>
+      <div class="options">
+        ${optionLabels.map((label, i) => `
+          <label class="option ${selected === i ? 'selected' : ''}" onclick="selectOption(${q.id}, ${i})">
+            <input type="radio" name="q${q.id}" value="${i}" ${selected === i ? 'checked' : ''}>
+            <span class="radio-custom"></span>
+            ${label}
+          </label>
+        `).join('')}
+      </div>
+    </div>
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" onclick="prevQuestion()" ${currentQuestion === 0 ? 'disabled' : ''}>
+        &larr; Back
+      </button>
+      <button class="btn btn-primary" onclick="nextQuestion()" ${selected === undefined ? 'disabled' : ''}>
+        ${currentQuestion === questions.length - 1 ? 'See Results' : 'Next'} &rarr;
+      </button>
+    </div>
+  `;
+}
+
+function renderResults(app) {
+  const totalScore = Object.values(answers).reduce((sum, v) => sum + v, 0);
+  const maxScore = questions.length * 4;
+
+  // Category breakdown
+  const categories = {};
+  questions.forEach(q => {
+    if (!categories[q.category]) categories[q.category] = { score: 0, max: 0 };
+    categories[q.category].score += (answers[q.id] || 0);
+    categories[q.category].max += 4;
+  });
+
+  // Part A score (first 6 questions — the official screener)
+  const partAScore = questions
+    .filter(q => q.part === 1)
+    .reduce((sum, q) => sum + (answers[q.id] || 0), 0);
+  const partAMax = 6 * 4;
+
+  // Determine risk level based on Part A (the validated screener portion)
+  let level, levelClass, description;
+  if (partAScore >= 14) {
+    level = "High Likelihood";
+    levelClass = "score-high";
+    description = "Your responses on the screener portion (Part A) are highly consistent with adult ADHD. It is strongly recommended that you consult a healthcare professional for a comprehensive evaluation.";
+  } else if (partAScore >= 10) {
+    level = "Moderate Likelihood";
+    levelClass = "score-moderate";
+    description = "Your responses on the screener portion (Part A) suggest some symptoms consistent with ADHD. Consider discussing these results with a healthcare professional for further evaluation.";
+  } else {
+    level = "Low Likelihood";
+    levelClass = "score-low";
+    description = "Your responses on the screener portion (Part A) suggest fewer symptoms typically associated with ADHD. However, if you have concerns, speaking with a healthcare professional is always worthwhile.";
+  }
+
+  app.innerHTML = `
+    <div class="card fade-in results">
+      <h2>Your Results</h2>
+      <div class="score-circle ${levelClass}">
+        <span class="score-value">${totalScore}</span>
+        <span class="score-max">of ${maxScore}</span>
+      </div>
+      <div class="result-label" style="color: ${levelClass === 'score-high' ? 'var(--danger)' : levelClass === 'score-moderate' ? '#D4A017' : 'var(--success)'}">${level}</div>
+      <p class="result-description">${description}</p>
+
+      <div class="breakdown">
+        <h3>Score Breakdown</h3>
+        <div class="breakdown-item">
+          <span class="breakdown-label">Part A (Screener)</span>
+          <div class="breakdown-bar-container">
+            <div class="breakdown-bar" style="width: ${(partAScore / partAMax) * 100}%"></div>
+          </div>
+          <span class="breakdown-score">${partAScore} / ${partAMax}</span>
+        </div>
+        ${Object.entries(categories).map(([name, data]) => `
+          <div class="breakdown-item">
+            <span class="breakdown-label">${name}</span>
+            <div class="breakdown-bar-container">
+              <div class="breakdown-bar" style="width: ${(data.score / data.max) * 100}%"></div>
+            </div>
+            <span class="breakdown-score">${data.score} / ${data.max}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="result-note">
+        <strong>Remember:</strong> This screening tool is not a substitute for a professional diagnosis. ADHD can only be diagnosed by a qualified healthcare provider through a comprehensive clinical evaluation. If your results concern you, please reach out to a mental health professional.
+      </div>
+
+      <button class="btn-restart" onclick="restart()">Take Again</button>
+    </div>
+  `;
+}
+
+function startQuiz() {
+  currentQuestion = 0;
+  answers = {};
+  render();
+}
+
+function selectOption(questionId, value) {
+  answers[questionId] = value;
+  render();
+}
+
+function nextQuestion() {
+  const q = questions[currentQuestion];
+  if (answers[q.id] === undefined) return;
+  currentQuestion++;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function prevQuestion() {
+  if (currentQuestion > 0) {
+    currentQuestion--;
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+function restart() {
+  currentQuestion = -1;
+  answers = {};
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Initial render
+render();
+</script>
+
+</body>
+</html>
