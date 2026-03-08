@@ -406,24 +406,6 @@
       color: #a5b4fc;
       margin-bottom: 2px;
     }
-    .msg .reply-trigger {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      background: rgba(15, 23, 42, .45);
-      border: 1px solid rgba(148, 163, 184, .45);
-      color: #cbd5e1;
-      width: 22px;
-      height: 22px;
-      border-radius: 999px;
-      font-size: .72rem;
-      line-height: 1;
-      cursor: pointer;
-    }
-    .msg .reply-trigger:hover {
-      border-color: #94a3b8;
-      color: #f8fafc;
-    }
     .msg .reply-quote {
       border-left: 2px solid rgba(99, 102, 241, .8);
       background: rgba(15, 23, 42, .28);
@@ -456,6 +438,9 @@
       font-size: .74rem;
       color: rgba(248, 250, 252, .9);
       word-break: break-word;
+    }
+    .msg.replyable {
+      cursor: pointer;
     }
     .msg.self .author { color: rgba(255,255,255,.7); }
     .msg.sticker-msg.self .author { color: #a5b4fc; }
@@ -1022,6 +1007,9 @@
       } else {
         const isSelf = msg.userId ? msg.userId === tabToken : false;
         div.classList.add(isSelf ? "self" : "other");
+        if (msg.id) {
+          div.classList.add("replyable");
+        }
         if (msg.userId) {
           div.dataset.userId = msg.userId;
         }
@@ -1034,8 +1022,7 @@
             renderReplyQuote(msg.replyTo) +
             `<div class="author">${isSelf ? "You" : escapeHtml(msg.name)}</div>` +
             `<img class="sticker-img" src="${stickerUrl}" alt="sticker">` +
-            (isSelf && msg.id ? `<div class="seen-indicator ${seenCount > 0 ? "active" : ""}" data-seen-for="${msg.id}">${seenLabel(seenCount)}</div>` : "") +
-            (msg.id ? `<button class="reply-trigger" type="button" data-msg-id="${msg.id}" title="Reply">&#8617;</button>` : "");
+            (isSelf && msg.id ? `<div class="seen-indicator ${seenCount > 0 ? "active" : ""}" data-seen-for="${msg.id}">${seenLabel(seenCount)}</div>` : "");
         } else {
           const seenCount = Math.max(0, (Array.isArray(msg.seenBy) ? msg.seenBy.length : 1) - 1);
           let content = renderReplyQuote(msg.replyTo);
@@ -1045,26 +1032,25 @@
           if (isSelf && msg.id) {
             content += `<div class="seen-indicator ${seenCount > 0 ? "active" : ""}" data-seen-for="${msg.id}">${seenLabel(seenCount)}</div>`;
           }
-          if (msg.id) {
-            content += `<button class="reply-trigger" type="button" data-msg-id="${msg.id}" title="Reply">&#8617;</button>`;
-          }
           div.innerHTML = content;
         }
       }
 
-      const replyBtn = div.querySelector(".reply-trigger");
-      if (replyBtn) {
-        replyBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const target = messagesById.get(replyBtn.dataset.msgId);
-          if (!target) return;
+      if (msg.type === "user" && msg.id) {
+        div.addEventListener("click", (e) => {
+          const target = e.target;
+          if (!(target instanceof HTMLElement)) return;
+          // Keep native media actions (open image/video controls) without triggering reply.
+          if (target.closest("button,video,a,input")) return;
+          if (target.tagName === "IMG" && !target.classList.contains("sticker-img")) return;
+
           pendingReply = {
-            id: target.id,
-            name: target.name || "Unknown",
-            text: target.text || "",
-            stickerUrl: target.stickerUrl || null,
-            fileUrl: target.fileUrl || null,
-            mediaType: target.mediaType || null,
+            id: msg.id,
+            name: msg.name || "Unknown",
+            text: msg.text || "",
+            stickerUrl: msg.stickerUrl || null,
+            fileUrl: msg.fileUrl || null,
+            mediaType: msg.mediaType || null,
           };
           replySnippet.textContent = `${pendingReply.name}: ${summarizeReply(pendingReply)}`;
           replyPreview.classList.add("active");
