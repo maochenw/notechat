@@ -239,14 +239,14 @@
     }
     .scheduled-item .remove-sched:hover { color: #ef4444; }
 
-    /* ── Sticker upload section (landing page) ── */
-    .sticker-upload-section input[type="file"] { display: none; }
-    .sticker-upload-section .hint {
+    /* ── Sticker section (landing page) ── */
+    .sticker-launch .hint {
       margin-top: .45rem;
       color: #64748b;
       font-size: .75rem;
       text-align: center;
     }
+    #sticker-file-input { display: none; }
     .sticker-grid {
       display: flex;
       flex-wrap: wrap;
@@ -295,6 +295,46 @@
     /* hidden canvas for cropping */
     #crop-canvas { display: none; }
 
+    /* ── Sticker Library Screen ── */
+    #stickers-screen {
+      display: none;
+      flex-direction: column;
+      position: fixed;
+      inset: 0;
+      background: #0f172a;
+      z-index: 40;
+    }
+    .stickers-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .6rem;
+      padding: .75rem 1rem;
+      border-bottom: 1px solid #334155;
+      background: #1e293b;
+      flex-shrink: 0;
+    }
+    .stickers-header .title {
+      font-weight: 700;
+      color: #f8fafc;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .stickers-body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: .9rem 1rem 1.2rem;
+    }
+    .stickers-body .hint {
+      color: #64748b;
+      font-size: .75rem;
+      text-align: center;
+      margin-top: .2rem;
+    }
+
     /* ── Chat Screen ── */
     #chat-screen {
       display: none;
@@ -323,8 +363,14 @@
     .chat-header .header-meta {
       min-width: 0;
       display: flex;
+      flex-direction: column;
+      gap: .15rem;
+    }
+    .chat-header .room-topline {
+      display: flex;
       align-items: baseline;
       gap: .35rem;
+      min-width: 0;
     }
     .chat-header .room-label {
       font-weight: 700;
@@ -334,6 +380,15 @@
       font-size: .85rem;
       color: #94a3b8;
       line-height: 1;
+    }
+    .chat-header .participants-line {
+      font-size: .72rem;
+      color: #94a3b8;
+      line-height: 1.25;
+      max-width: 100%;
+      max-height: 2.5em;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .chat-header .header-actions {
       display: flex;
@@ -750,26 +805,40 @@
 
       <div class="divider">custom stickers</div>
 
-      <div class="sticker-upload-section">
-        <button class="btn-secondary" id="add-sticker-btn" style="width:100%">Upload Sticker Images</button>
-        <input type="file" id="sticker-file-input" accept="image/*" multiple>
-        <div class="hint">Desktop: hold Cmd/Ctrl to select multiple images</div>
-        <canvas id="crop-canvas" width="128" height="128"></canvas>
-        <div class="sticker-grid" id="sticker-grid-landing">
-          <div class="empty">No stickers yet</div>
-        </div>
+      <div class="sticker-launch">
+        <button class="btn-secondary" id="open-stickers-btn" style="width:100%">Open Sticker Library</button>
+        <div class="hint">Manage stickers on a dedicated page</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="stickers-screen">
+    <div class="stickers-header">
+      <button id="close-stickers-btn">Back</button>
+      <span class="title">Sticker Library</span>
+      <button class="btn-secondary" id="add-sticker-btn-manager">Upload Images</button>
+    </div>
+    <div class="stickers-body">
+      <input type="file" id="sticker-file-input" accept="image/*" multiple>
+      <canvas id="crop-canvas" width="128" height="128"></canvas>
+      <div class="hint">Desktop: hold Cmd/Ctrl to select multiple images</div>
+      <div class="sticker-grid" id="sticker-grid-manager">
+        <div class="empty">No stickers yet</div>
       </div>
     </div>
   </div>
 
   <!-- Chat Screen -->
-  <div id="chat-screen">
-    <div class="chat-header">
-      <div class="header-meta">
-        <span class="room-label" id="room-label"></span>
-        <span class="user-count" id="user-count"></span>
-      </div>
-      <div class="header-actions">
+    <div id="chat-screen">
+      <div class="chat-header">
+        <div class="header-meta">
+          <div class="room-topline">
+            <span class="room-label" id="room-label"></span>
+            <span class="user-count" id="user-count"></span>
+          </div>
+          <div class="participants-line" id="participants-line"></div>
+        </div>
+        <div class="header-actions">
         <button id="update-name-btn" title="Update display name">Update</button>
         <button id="clear-room-btn" class="clear-btn" title="Clear all messages in this room">Clear</button>
         <button id="leave-btn">Leave</button>
@@ -844,11 +913,15 @@
     const nameInput    = document.getElementById("name-input");
     const roomInput    = document.getElementById("room-input");
     const joinBtn      = document.getElementById("join-btn");
+    const stickersScreen = document.getElementById("stickers-screen");
+    const openStickersBtn = document.getElementById("open-stickers-btn");
+    const closeStickersBtn = document.getElementById("close-stickers-btn");
     const leaveBtn     = document.getElementById("leave-btn");
     const clearRoomBtn = document.getElementById("clear-room-btn");
     const updateNameBtn = document.getElementById("update-name-btn");
     const roomLabel    = document.getElementById("room-label");
     const userCount    = document.getElementById("user-count");
+    const participantsLine = document.getElementById("participants-line");
     const messagesEl   = document.getElementById("messages");
     const msgInput     = document.getElementById("msg-input");
     const sendBtn      = document.getElementById("send-btn");
@@ -867,10 +940,10 @@
     const schedTime    = document.getElementById("sched-time");
     const publishBtn   = document.getElementById("publish-btn");
     const scheduledList = document.getElementById("scheduled-list");
-    const addStickerBtn = document.getElementById("add-sticker-btn");
+    const addStickerBtnManager = document.getElementById("add-sticker-btn-manager");
     const stickerFileInput = document.getElementById("sticker-file-input");
     const cropCanvas   = document.getElementById("crop-canvas");
-    const stickerGridLanding = document.getElementById("sticker-grid-landing");
+    const stickerGridManager = document.getElementById("sticker-grid-manager");
     const stickerBtn   = document.getElementById("sticker-btn");
     const stickerPicker = document.getElementById("sticker-picker");
     const stickerPickerGrid = document.getElementById("sticker-picker-grid");
@@ -947,6 +1020,18 @@
       const n = Number(count) || 0;
       if (n <= 0) return "";
       return `Seen by ${n}`;
+    }
+
+    function renderParticipants(list) {
+      if (!Array.isArray(list) || list.length === 0) {
+        participantsLine.textContent = "";
+        return;
+      }
+      const text = list.map((p) => {
+        const displayName = p.userId === tabToken ? "You" : (p.name || "Unknown");
+        return `${displayName}: ${p.msgs || 0}m / ${p.words || 0}w / ${p.chars || 0}c`;
+      }).join(" · ");
+      participantsLine.textContent = text;
     }
 
     function cancelSeenMark(messageId) {
@@ -1109,11 +1194,13 @@
       currentRoomId = room;
       roomLabel.textContent = `Room ${room}`;
       joinScreen.style.display = "none";
+      stickersScreen.style.display = "none";
       chatScreen.style.display = "flex";
       messagesEl.innerHTML = "";
       messagesById.clear();
       clearPendingReply();
       resetSeenTracking();
+      participantsLine.textContent = "";
 
       socket.emit("join-room", { room, name });
       msgInput.focus();
@@ -1122,6 +1209,12 @@
     joinBtn.addEventListener("click", joinRoom);
     roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
     nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") roomInput.focus(); });
+    openStickersBtn.addEventListener("click", () => {
+      stickersScreen.style.display = "flex";
+    });
+    closeStickersBtn.addEventListener("click", () => {
+      stickersScreen.style.display = "none";
+    });
     updateNameBtn.addEventListener("click", submitDisplayNameChange);
     clearReplyBtn.addEventListener("click", clearPendingReply);
     clearRoomBtn.addEventListener("click", () => {
@@ -1244,6 +1337,7 @@
     socket.on("message-seen", ({ messageId, seenCount }) => {
       updateSeenIndicator(messageId, seenCount);
     });
+    socket.on("room-participants", renderParticipants);
     socket.on("user-count", (count) => { userCount.textContent = ` · ${count} online`; });
 
     // ── Scheduled rooms ──
@@ -1293,7 +1387,7 @@
 
     // ── Stickers ──
     stickerFileInput.multiple = true;
-    addStickerBtn.addEventListener("click", () => stickerFileInput.click());
+    addStickerBtnManager.addEventListener("click", () => stickerFileInput.click());
 
     async function uploadStickerFile(file) {
       if (file.type === "image/gif") {
@@ -1349,19 +1443,19 @@
       }
     });
 
-    function renderStickerGridLanding(list) {
+    function renderStickerLibrary(list) {
       if (!list.length) {
-        stickerGridLanding.innerHTML = '<div class="empty">No stickers yet</div>';
+        stickerGridManager.innerHTML = '<div class="empty">No stickers yet</div>';
         return;
       }
-      stickerGridLanding.innerHTML = list.map((s) =>
+      stickerGridManager.innerHTML = list.map((s) =>
         `<div class="sticker-thumb" data-id="${s.id}">
           <img src="${withTab(s.url)}" alt="sticker">
           ${s.builtin ? '' : '<button class="remove-sticker" title="Remove">&times;</button>'}
         </div>`
       ).join("");
 
-      stickerGridLanding.querySelectorAll(".remove-sticker").forEach((btn) => {
+      stickerGridManager.querySelectorAll(".remove-sticker").forEach((btn) => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           const id = btn.closest(".sticker-thumb").dataset.id;
@@ -1395,7 +1489,7 @@
 
     socket.on("stickers", (list) => {
       currentStickers = list;
-      renderStickerGridLanding(list);
+      renderStickerLibrary(list);
       renderStickerPickerChat(list);
     });
 

@@ -132,8 +132,10 @@ app.get("/app", (_req, res) => {
   res.sendFile(APP_PAGE);
 });
 
-app.use("/sticker", requireAccess, express.static(path.join(PUBLIC_DIR, "sticker")));
-app.use("/stickers", requireAccess, express.static(path.join(PUBLIC_DIR, "stickers")));
+const BUILTIN_STICKERS_DIR = path.join(PUBLIC_DIR, "stickers");
+// Keep /sticker as a compatibility alias for previously shared URLs.
+app.use("/sticker", requireAccess, express.static(BUILTIN_STICKERS_DIR));
+app.use("/stickers", requireAccess, express.static(BUILTIN_STICKERS_DIR));
 app.use("/uploads", requireAccess, express.static(UPLOADS_DIR));
 app.use("/uploaded-stickers", requireAccess, express.static(STICKERS_DIR));
 
@@ -147,12 +149,10 @@ app.post("/upload", requireAccess, upload.single("file"), (req, res) => {
   res.json({ url: fileUrl, mediaType });
 });
 
-// Built-in stickers from public/sticker/ and public/stickers/
+// Built-in stickers from public/stickers/
 const BUILTIN_STICKER_DIRS = [
-  { dir: path.join(__dirname, "public", "sticker"), urlPrefix: "/sticker" },
   { dir: path.join(__dirname, "public", "stickers"), urlPrefix: "/stickers" },
 ];
-
 const builtinStickers = [];
 for (const { dir, urlPrefix } of BUILTIN_STICKER_DIRS) {
   if (fs.existsSync(dir)) {
@@ -194,6 +194,8 @@ app.post("/upload-sticker", requireAccess, stickerUpload.single("sticker"), (req
 
 // Track rooms and their message history
 const rooms = new Map();
+// Active participants and contribution stats per room
+const roomParticipants = new Map();
 
 // Scheduled rooms visible on the landing page
 const scheduledRooms = [];
@@ -208,6 +210,61 @@ function cleanupRoomFiles(room) {
       fs.unlink(filePath, () => {});
     }
   }
+}
+
+function getTextStats(text) {
+  const raw = `${text || ""}`;
+  const noWhitespace = raw.replace(/\s+/g, "");
+  const chars = Array.from(noWhitespace).length;
+  if (!noWhitespace) return { words: 0, chars: 0 };
+
+  const hanChars = raw.match(/\p{Script=Han}/gu) || [];
+  const nonHanText = raw.replace(/\p{Script=Han}/gu, " ").trim();
+  const nonHanWords = nonHanText ? nonHanText.split(/\s+/).length : 0;
+
+  return { words: hanChars.length + nonHanWords, chars };
+}
+
+function getMessageStats(msg) {
+  const textStats = getTextStats(msg?.text || "");
+  if (msg?.stickerUrl || msg?.fileUrl) {
+    return {
+      words: textStats.words + 1,
+      chars: textStats.chars + 1,
+    };
+  }
+  return textStats;
+}
+
+function getUserStatsFromHistory(room, userId) {
+  const history = rooms.get(room) || [];
+  let msgs = 0;
+  let words = 0;
+  let chars = 0;
+  for (const msg of history) {
+    if (msg.type !== "user" || msg.userId !== userId) continue;
+    msgs += 1;
+    const stats = getMessageStats(msg);
+    words += stats.words;
+    chars += stats.chars;
+  }
+  return { msgs, words, chars };
+}
+
+function emitRoomParticipants(room) {
+  const participantsMap = roomParticipants.get(room) || new Map();
+  const participants = Array.from(participantsMap.values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((p) => ({
+      userId: p.userId,
+      name: p.name,
+      msgs: p.msgs,
+      words: p.words,
+      chars: p.chars,
+    }));
+
+  io.to(room).emit("room-participants", participants);
+  io.to(room).emit("user-count", participants.length);
 }
 
 io.use((socket, next) => {
@@ -263,9 +320,27 @@ io.on("connection", (socket) => {
     if (!rooms.has(room)) {
       rooms.set(room, []);
     }
+    if (!roomParticipants.has(room)) {
+      roomParticipants.set(room, new Map());
+    }
 
     // Send chat history to the joining user
     socket.emit("chat-history", rooms.get(room));
+
+    const participantsMap = roomParticipants.get(room);
+    const existingParticipant = participantsMap.get(clientId);
+    if (!existingParticipant) {
+      const stats = getUserStatsFromHistory(room, clientId);
+      participantsMap.set(clientId, {
+        userId: clientId,
+        name: username,
+        msgs: stats.msgs,
+        words: stats.words,
+        chars: stats.chars,
+      });
+    } else {
+      existingParticipant.name = username;
+    }
 
     // Notify others in the room
     const joinMsg = {
@@ -277,9 +352,7 @@ io.on("connection", (socket) => {
     rooms.get(room).push(joinMsg);
     io.to(room).emit("message", joinMsg);
 
-    // Send current user count
-    const count = io.sockets.adapter.rooms.get(room)?.size || 0;
-    io.to(room).emit("user-count", count);
+    emitRoomParticipants(room);
   });
 
   socket.on("update-name", ({ name }) => {
@@ -289,6 +362,12 @@ io.on("connection", (socket) => {
     const previousName = username;
     username = nextName;
     socket.emit("name-updated", username);
+
+    const participantsMap = roomParticipants.get(currentRoom);
+    if (participantsMap?.has(clientId)) {
+      participantsMap.get(clientId).name = username;
+      emitRoomParticipants(currentRoom);
+    }
 
     if (rooms.has(currentRoom)) {
       for (const msg of rooms.get(currentRoom)) {
@@ -318,6 +397,15 @@ io.on("connection", (socket) => {
 
     cleanupRoomFiles(currentRoom);
     rooms.set(currentRoom, []);
+    const participantsMap = roomParticipants.get(currentRoom);
+    if (participantsMap) {
+      participantsMap.forEach((participant) => {
+        participant.msgs = 0;
+        participant.words = 0;
+        participant.chars = 0;
+      });
+      emitRoomParticipants(currentRoom);
+    }
     io.to(currentRoom).emit("room-cleared");
   });
 
@@ -355,6 +443,16 @@ io.on("connection", (socket) => {
     };
     rooms.get(currentRoom).push(msg);
     io.to(currentRoom).emit("message", msg);
+
+    const participantsMap = roomParticipants.get(currentRoom);
+    if (participantsMap?.has(clientId)) {
+      const stats = getMessageStats(msg);
+      const participant = participantsMap.get(clientId);
+      participant.msgs += 1;
+      participant.words += stats.words;
+      participant.chars += stats.chars;
+      emitRoomParticipants(currentRoom);
+    }
   });
 
   socket.on("mark-seen", ({ messageId }) => {
@@ -377,6 +475,12 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     if (!currentRoom || !username) return;
 
+    const participantsMap = roomParticipants.get(currentRoom);
+    if (participantsMap) {
+      participantsMap.delete(clientId);
+      emitRoomParticipants(currentRoom);
+    }
+
     const leaveMsg = {
       id: crypto.randomUUID(),
       type: "system",
@@ -389,13 +493,12 @@ io.on("connection", (socket) => {
     }
     io.to(currentRoom).emit("message", leaveMsg);
 
-    const count = io.sockets.adapter.rooms.get(currentRoom)?.size || 0;
-    io.to(currentRoom).emit("user-count", count);
-
     // Clean up empty rooms
+    const count = io.sockets.adapter.rooms.get(currentRoom)?.size || 0;
     if (count === 0) {
       cleanupRoomFiles(currentRoom);
       rooms.delete(currentRoom);
+      roomParticipants.delete(currentRoom);
     }
   });
 });
