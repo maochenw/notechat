@@ -132,6 +132,15 @@ app.get("/app", (_req, res) => {
   res.sendFile(APP_PAGE);
 });
 
+app.get("/index-archived", (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index-archived.html"));
+});
+
+// Landing image used by public/index.html
+app.get("/index.jpg", (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.jpg"));
+});
+
 const BUILTIN_STICKERS_DIR = path.join(PUBLIC_DIR, "stickers");
 // Keep /sticker as a compatibility alias for previously shared URLs.
 app.use("/sticker", requireAccess, express.static(BUILTIN_STICKERS_DIR));
