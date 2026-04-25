@@ -5,6 +5,8 @@ const path = require("path");
 const multer = require("multer");
 const fs = require("fs");
 const crypto = require("crypto");
+const net = require("net");
+const dns = require("dns").promises;
 
 const app = express();
 const server = http.createServer(app);
@@ -14,16 +16,42 @@ const ACCESS_CODE = process.env.ACCESS_CODE || "longtimenosee";
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 const STICKERS_DIR = path.join(__dirname, "stickers");
 const PUBLIC_DIR = path.join(__dirname, "public");
+const BUILTIN_STICKERS_DIR = path.join(PUBLIC_DIR, "stickers");
+const LEGACY_BUILTIN_STICKERS_DIR = path.join(PUBLIC_DIR, "sticker");
 const ACCESS_PAGE = path.join(PUBLIC_DIR, "access.html");
 const APP_PAGE = path.join(PUBLIC_DIR, "index.html");
 
 const tabSessions = new Map();
+
+function buildRtcIceServers() {
+  const iceServers = [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ];
+  const turnUrlsRaw = `${process.env.RTC_TURN_URLS || process.env.RTC_TURN_URL || ""}`.trim();
+  if (!turnUrlsRaw) return iceServers;
+
+  const turnUrls = turnUrlsRaw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!turnUrls.length) return iceServers;
+
+  const username = `${process.env.RTC_TURN_USERNAME || ""}`.trim();
+  const credential = `${process.env.RTC_TURN_CREDENTIAL || ""}`.trim();
+  const turnServer = { urls: turnUrls.length === 1 ? turnUrls[0] : turnUrls };
+  if (username) turnServer.username = username;
+  if (credential) turnServer.credential = credential;
+  iceServers.push(turnServer);
+  return iceServers;
+}
 
 // Ensure directories exist
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 fs.mkdirSync(STICKERS_DIR, { recursive: true });
 
 app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "1mb" }));
 
 function createTabSession() {
   const tabToken = crypto.randomUUID();
@@ -136,15 +164,19 @@ app.get("/index-archived", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index-archived.html"));
 });
 
+app.get("/rtc-config", requireAccess, (_req, res) => {
+  return res.json({ iceServers: buildRtcIceServers() });
+});
+
 // Landing image used by public/index.html
 app.get("/index.jpg", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.jpg"));
 });
 
-const BUILTIN_STICKERS_DIR = path.join(PUBLIC_DIR, "stickers");
-// Keep /sticker as a compatibility alias for previously shared URLs.
-app.use("/sticker", requireAccess, express.static(BUILTIN_STICKERS_DIR));
+// Keep /sticker as compatibility alias and support both folders if present.
 app.use("/stickers", requireAccess, express.static(BUILTIN_STICKERS_DIR));
+app.use("/sticker", requireAccess, express.static(LEGACY_BUILTIN_STICKERS_DIR));
+app.use("/sticker", requireAccess, express.static(BUILTIN_STICKERS_DIR));
 app.use("/uploads", requireAccess, express.static(UPLOADS_DIR));
 app.use("/uploaded-stickers", requireAccess, express.static(STICKERS_DIR));
 
@@ -158,35 +190,273 @@ app.post("/upload", requireAccess, upload.single("file"), (req, res) => {
   res.json({ url: fileUrl, mediaType });
 });
 
-// Built-in stickers from public/stickers/
-const BUILTIN_STICKER_DIRS = [
-  { dir: path.join(__dirname, "public", "stickers"), urlPrefix: "/stickers" },
-];
-const builtinStickers = [];
-for (const { dir, urlPrefix } of BUILTIN_STICKER_DIRS) {
-  if (fs.existsSync(dir)) {
-    for (const f of fs.readdirSync(dir)) {
-      if (/\.(png|jpe?g|gif|webp)$/i.test(f)) {
-        builtinStickers.push({
-          id: `builtin-${urlPrefix.slice(1)}-${path.basename(f, path.extname(f))}`,
-          url: `${urlPrefix}/${f}`,
-          builtin: true,
-        });
-      }
-    }
-  }
+function isStickerFile(filePath) {
+  return /\.(png|jpe?g|gif|webp)$/i.test(filePath);
 }
 
-// User-uploaded stickers from disk on startup
-const userStickers = fs.readdirSync(STICKERS_DIR)
-  .filter((f) => /\.(png|jpe?g|gif|webp)$/i.test(f))
-  .map((f) => ({
-    id: path.basename(f, path.extname(f)),
-    url: `/uploaded-stickers/${f}`,
-  }));
+function toUrlPath(urlPrefix, relPath) {
+  const encoded = relPath
+    .split(path.sep)
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${urlPrefix}/${encoded}`;
+}
 
-// Combined list: built-in first, then user-uploaded
-const stickers = [...builtinStickers, ...userStickers];
+function contentTypeToExtension(contentType) {
+  const base = `${contentType || ""}`.split(";")[0].trim().toLowerCase();
+  if (base === "image/jpeg") return ".jpg";
+  if (base === "image/png") return ".png";
+  if (base === "image/gif") return ".gif";
+  if (base === "image/webp") return ".webp";
+  return "";
+}
+
+function isPrivateIpAddress(ip) {
+  if (net.isIP(ip) === 4) {
+    const parts = ip.split(".").map((v) => Number(v));
+    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
+    const [a, b] = parts;
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    return false;
+  }
+
+  if (net.isIP(ip) === 6) {
+    const normalized = ip.toLowerCase();
+    if (normalized === "::1") return true;
+    if (normalized.startsWith("::ffff:")) {
+      const maybeV4 = normalized.slice(7);
+      return isPrivateIpAddress(maybeV4);
+    }
+    if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
+    if (normalized.startsWith("fe8") || normalized.startsWith("fe9") || normalized.startsWith("fea") || normalized.startsWith("feb")) return true;
+    return false;
+  }
+
+  return true;
+}
+
+async function isSafeRemoteHost(hostname) {
+  const host = `${hostname || ""}`.trim().toLowerCase();
+  if (!host) return false;
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
+
+  if (net.isIP(host)) {
+    return !isPrivateIpAddress(host);
+  }
+
+  let addresses = [];
+  try {
+    addresses = await dns.lookup(host, { all: true });
+  } catch (_error) {
+    return false;
+  }
+  if (!addresses.length) return false;
+  return addresses.every((addr) => !isPrivateIpAddress(addr.address));
+}
+
+function readStickerFilesRecursive(rootDir) {
+  if (!fs.existsSync(rootDir)) return [];
+  const out = [];
+  const walk = (currentDir, relBase) => {
+    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+      const absPath = path.join(currentDir, entry.name);
+      const relPath = relBase ? path.join(relBase, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        walk(absPath, relPath);
+        continue;
+      }
+      if (entry.isFile() && isStickerFile(relPath)) {
+        out.push(relPath);
+      }
+    }
+  };
+  walk(rootDir, "");
+  return out;
+}
+
+function loadBuiltinStickers() {
+  const builtinStickerDirs = [
+    { dir: BUILTIN_STICKERS_DIR, urlPrefix: "/stickers" },
+    { dir: LEGACY_BUILTIN_STICKERS_DIR, urlPrefix: "/sticker" },
+  ];
+  const out = [];
+  const seenUrl = new Set();
+
+  for (const { dir, urlPrefix } of builtinStickerDirs) {
+    for (const relPath of readStickerFilesRecursive(dir)) {
+      const relNoExt = relPath.replace(path.extname(relPath), "");
+      const safeIdPart = relNoExt.replace(/[\\/]+/g, "-");
+      const url = toUrlPath(urlPrefix, relPath);
+      if (seenUrl.has(url)) continue;
+      seenUrl.add(url);
+      out.push({
+        id: `builtin-${urlPrefix.slice(1)}-${safeIdPart}`,
+        url,
+        builtin: true,
+      });
+    }
+  }
+
+  return out;
+}
+
+function loadUserStickers() {
+  return fs.readdirSync(STICKERS_DIR)
+    .filter((f) => isStickerFile(f))
+    .map((f) => ({
+      id: path.basename(f, path.extname(f)),
+      url: `/uploaded-stickers/${encodeURIComponent(f)}`,
+    }));
+}
+
+function rebuildStickerList() {
+  const builtinStickers = loadBuiltinStickers();
+  const userStickers = loadUserStickers();
+  return [...builtinStickers, ...userStickers];
+}
+
+let stickers = rebuildStickerList();
+
+app.get("/search-stickers", requireAccess, async (req, res) => {
+  const q = `${req.query.q || ""}`.trim();
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isFinite(rawLimit) ? Math.min(24, Math.max(1, rawLimit)) : 12;
+
+  if (!q) {
+    return res.status(400).json({ error: "Missing query" });
+  }
+
+  const apiKey = `${process.env.TENOR_API_KEY || ""}`.trim();
+  if (!apiKey) {
+    return res.status(503).json({ error: "TENOR_API_KEY is not configured" });
+  }
+
+  const params = new URLSearchParams({
+    key: apiKey,
+    q,
+    limit: String(limit),
+    media_filter: "gif,tinygif,mediumgif",
+    contentfilter: "off",
+    locale: "zh_CN",
+  });
+
+  try {
+    const response = await fetch(`https://tenor.googleapis.com/v2/search?${params.toString()}`);
+    if (!response.ok) {
+      return res.status(502).json({ error: "Failed to fetch Tenor results" });
+    }
+    const data = await response.json();
+    const results = Array.isArray(data?.results) ? data.results : [];
+
+    const normalized = results.map((item) => {
+      const media = item?.media_formats || {};
+      const best = media.mediumgif || media.gif || media.tinygif || null;
+      const preview = media.tinygif || media.nanogif || media.gif || best;
+      return {
+        id: `${item?.id || crypto.randomUUID()}`,
+        title: `${item?.content_description || ""}`.trim(),
+        url: `${best?.url || ""}`,
+        previewUrl: `${preview?.url || best?.url || ""}`,
+      };
+    }).filter((item) => item.url);
+
+    return res.json({ results: normalized });
+  } catch (_error) {
+    return res.status(502).json({ error: "Sticker search failed" });
+  }
+});
+
+app.post("/import-sticker-url", requireAccess, async (req, res) => {
+  const sourceUrl = `${req.body?.url || ""}`.trim();
+  if (!sourceUrl) {
+    return res.status(400).json({ error: "Missing url" });
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(sourceUrl);
+  } catch (_error) {
+    return res.status(400).json({ error: "Invalid url" });
+  }
+  if (parsed.protocol !== "https:") {
+    return res.status(400).json({ error: "Only https urls are allowed" });
+  }
+  const safeHost = await isSafeRemoteHost(parsed.hostname);
+  if (!safeHost) {
+    return res.status(400).json({ error: "Blocked host" });
+  }
+
+  try {
+    const controller = new AbortController();
+    let timeoutId = null;
+    timeoutId = setTimeout(() => controller.abort(), 10_000);
+    const response = await fetch(sourceUrl, { signal: controller.signal })
+      .finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+      });
+    if (!response.ok) {
+      return res.status(502).json({ error: "Failed to download sticker" });
+    }
+
+    const contentType = `${response.headers.get("content-type") || ""}`.toLowerCase();
+    if (!contentType.startsWith("image/")) {
+      return res.status(400).json({ error: "URL does not point to an image" });
+    }
+
+    const maxBytes = 10 * 1024 * 1024;
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      return res.status(400).json({ error: "Image is too large (max 10MB)" });
+    }
+
+    let buffer = null;
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let total = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          return res.status(400).json({ error: "Image is too large (max 10MB)" });
+        }
+        chunks.push(Buffer.from(value));
+      }
+      buffer = Buffer.concat(chunks, total);
+    } else {
+      const ab = await response.arrayBuffer();
+      buffer = Buffer.from(ab);
+      if (buffer.length > maxBytes) {
+        return res.status(400).json({ error: "Image is too large (max 10MB)" });
+      }
+    }
+
+    const extFromType = contentTypeToExtension(contentType);
+    const extFromPath = path.extname(parsed.pathname).toLowerCase();
+    const ext = extFromType || (isStickerFile(extFromPath) ? extFromPath : ".png");
+    const filename = `${crypto.randomUUID()}${ext}`;
+    const target = path.join(STICKERS_DIR, filename);
+    fs.writeFileSync(target, buffer);
+
+    const sticker = {
+      id: path.basename(filename, path.extname(filename)),
+      url: `/uploaded-stickers/${filename}`,
+    };
+    stickers.push(sticker);
+    io.emit("stickers", stickers);
+    return res.json(sticker);
+  } catch (_error) {
+    return res.status(502).json({ error: "Failed to import sticker" });
+  }
+});
 
 app.post("/upload-sticker", requireAccess, stickerUpload.single("sticker"), (req, res) => {
   if (!req.file) {
@@ -270,6 +540,8 @@ function emitRoomParticipants(room) {
       msgs: p.msgs,
       words: p.words,
       chars: p.chars,
+      typing: !!p.typing,
+      lastActiveAt: p.lastActiveAt || 0,
     }));
 
   io.to(room).emit("room-participants", participants);
@@ -291,9 +563,25 @@ io.on("connection", (socket) => {
   let currentRoom = null;
   let username = null;
   const clientId = `${socket.handshake.auth?.tab || socket.id}`;
+  const normalizeTargetUserId = (raw) => {
+    const value = `${raw || ""}`.trim();
+    return value || null;
+  };
+  const emitToTargetUserInRoom = (room, targetUserId, eventName, payload) => {
+    if (!room || !targetUserId) return 0;
+    let sent = 0;
+    for (const peerSocket of io.sockets.sockets.values()) {
+      if (`${peerSocket.handshake.auth?.tab || peerSocket.id}` !== targetUserId) continue;
+      if (!peerSocket.rooms.has(room)) continue;
+      peerSocket.emit(eventName, payload);
+      sent += 1;
+    }
+    return sent;
+  };
 
   // Send current state on connect
   socket.emit("scheduled-rooms", scheduledRooms);
+  stickers = rebuildStickerList();
   socket.emit("stickers", stickers);
 
   socket.on("publish-room", ({ room, time }) => {
@@ -321,8 +609,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("join-room", ({ room, name }) => {
-    username = name;
+    username = `${name || ""}`.trim().slice(0, 30);
     currentRoom = room;
+    const now = Date.now();
 
     socket.join(room);
 
@@ -346,9 +635,13 @@ io.on("connection", (socket) => {
         msgs: stats.msgs,
         words: stats.words,
         chars: stats.chars,
+        typing: false,
+        lastActiveAt: now,
       });
     } else {
       existingParticipant.name = username;
+      existingParticipant.typing = false;
+      existingParticipant.lastActiveAt = now;
     }
 
     // Notify others in the room
@@ -399,6 +692,100 @@ io.on("connection", (socket) => {
       rooms.get(currentRoom).push(renameMsg);
     }
     io.to(currentRoom).emit("message", renameMsg);
+  });
+
+  socket.on("typing", ({ isTyping }) => {
+    if (!currentRoom) return;
+    const participantsMap = roomParticipants.get(currentRoom);
+    if (!participantsMap?.has(clientId)) return;
+
+    const participant = participantsMap.get(clientId);
+    participant.typing = !!isTyping;
+    if (participant.typing) {
+      participant.lastActiveAt = Date.now();
+    }
+    emitRoomParticipants(currentRoom);
+  });
+
+  socket.on("call-invite", ({ targetUserId }) => {
+    if (!currentRoom) return;
+    const target = normalizeTargetUserId(targetUserId);
+    const payload = {
+      fromUserId: clientId,
+      fromName: username || "Unknown",
+      targetUserId: target,
+    };
+    if (target) {
+      emitToTargetUserInRoom(currentRoom, target, "call-invite", payload);
+      return;
+    }
+    socket.to(currentRoom).emit("call-invite", {
+      ...payload,
+    });
+  });
+
+  socket.on("call-accepted", ({ targetUserId }) => {
+    if (!currentRoom) return;
+    const target = normalizeTargetUserId(targetUserId);
+    if (!target) return;
+    emitToTargetUserInRoom(currentRoom, target, "call-accepted", {
+      fromUserId: clientId,
+      targetUserId: target,
+    });
+  });
+
+  socket.on("call-declined", ({ targetUserId }) => {
+    if (!currentRoom) return;
+    const target = normalizeTargetUserId(targetUserId);
+    if (!target) return;
+    emitToTargetUserInRoom(currentRoom, target, "call-declined", {
+      fromUserId: clientId,
+      targetUserId: target,
+    });
+  });
+
+  socket.on("webrtc-offer", ({ targetUserId, sdp }) => {
+    if (!currentRoom || !sdp) return;
+    const target = normalizeTargetUserId(targetUserId);
+    if (!target) return;
+    emitToTargetUserInRoom(currentRoom, target, "webrtc-offer", {
+      fromUserId: clientId,
+      fromName: username || "Unknown",
+      targetUserId: target,
+      sdp,
+    });
+  });
+
+  socket.on("webrtc-answer", ({ targetUserId, sdp }) => {
+    if (!currentRoom || !sdp) return;
+    const target = normalizeTargetUserId(targetUserId);
+    if (!target) return;
+    emitToTargetUserInRoom(currentRoom, target, "webrtc-answer", {
+      fromUserId: clientId,
+      targetUserId: target,
+      sdp,
+    });
+  });
+
+  socket.on("webrtc-ice-candidate", ({ targetUserId, candidate }) => {
+    if (!currentRoom || !candidate) return;
+    const target = normalizeTargetUserId(targetUserId);
+    if (!target) return;
+    emitToTargetUserInRoom(currentRoom, target, "webrtc-ice-candidate", {
+      fromUserId: clientId,
+      targetUserId: target,
+      candidate,
+    });
+  });
+
+  socket.on("webrtc-hangup", ({ targetUserId }) => {
+    if (!currentRoom) return;
+    const target = normalizeTargetUserId(targetUserId);
+    if (!target) return;
+    emitToTargetUserInRoom(currentRoom, target, "webrtc-hangup", {
+      fromUserId: clientId,
+      targetUserId: target,
+    });
   });
 
   socket.on("clear-room", () => {
@@ -460,6 +847,8 @@ io.on("connection", (socket) => {
       participant.msgs += 1;
       participant.words += stats.words;
       participant.chars += stats.chars;
+      participant.typing = false;
+      participant.lastActiveAt = Date.now();
       emitRoomParticipants(currentRoom);
     }
   });
@@ -467,6 +856,9 @@ io.on("connection", (socket) => {
   socket.on("mark-seen", ({ messageId }) => {
     const id = `${messageId || ""}`.trim();
     if (!currentRoom || !id || !rooms.has(currentRoom)) return;
+
+    const participantsMap = roomParticipants.get(currentRoom);
+    const participant = participantsMap?.get(clientId);
 
     const msg = rooms.get(currentRoom).find((m) => m.id === id && m.type === "user");
     if (!msg) return;
@@ -477,11 +869,18 @@ io.on("connection", (socket) => {
     if (msg.seenBy.includes(clientId)) return;
 
     msg.seenBy.push(clientId);
+    if (participant) {
+      participant.lastActiveAt = Date.now();
+      emitRoomParticipants(currentRoom);
+    }
     const seenCount = Math.max(0, msg.seenBy.length - 1);
     io.to(currentRoom).emit("message-seen", { messageId: id, seenCount });
   });
 
   socket.on("disconnect", () => {
+    if (currentRoom) {
+      socket.to(currentRoom).emit("webrtc-peer-left", { userId: clientId });
+    }
     if (!currentRoom || !username) return;
 
     const participantsMap = roomParticipants.get(currentRoom);
