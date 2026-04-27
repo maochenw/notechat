@@ -1421,6 +1421,33 @@
       videoStatus.textContent = text || "";
     }
 
+    function normalizeIceCandidate(candidate) {
+      if (!candidate) return null;
+      if (typeof candidate.toJSON === "function") {
+        return candidate.toJSON();
+      }
+      if (typeof candidate === "string") {
+        return { candidate };
+      }
+      const raw = {
+        candidate: candidate.candidate,
+        sdpMid: candidate.sdpMid,
+        sdpMLineIndex: candidate.sdpMLineIndex,
+        usernameFragment: candidate.usernameFragment,
+      };
+      return raw.candidate ? raw : null;
+    }
+
+    function toRtcIceCandidate(candidate) {
+      const normalized = normalizeIceCandidate(candidate);
+      if (!normalized) return null;
+      try {
+        return new RTCIceCandidate(normalized);
+      } catch (_error) {
+        return null;
+      }
+    }
+
     function clearConnectionWatchdog() {
       if (!connectionWatchdogTimer) return;
       clearTimeout(connectionWatchdogTimer);
@@ -1538,9 +1565,11 @@
 
       peerConnection.onicecandidate = (event) => {
         if (!event.candidate || !callPeerUserId) return;
+        const candidate = normalizeIceCandidate(event.candidate);
+        if (!candidate) return;
         socket.emit("webrtc-ice-candidate", {
           targetUserId: callPeerUserId,
-          candidate: event.candidate,
+          candidate,
         });
       };
 
@@ -1553,6 +1582,7 @@
           setVideoStatus(`Connected with ${callPeerName || "peer"}`);
         } else if (state === "connecting") {
           setVideoStatus("Connecting...");
+          scheduleConnectionWatchdog(20000, "Unable to establish video connection");
         } else if (state === "disconnected") {
           setVideoStatus("Connection unstable, recovering...");
           scheduleConnectionWatchdog(12000, "Connection lost");
@@ -1589,8 +1619,10 @@
       const queue = [...pendingIceCandidates];
       pendingIceCandidates = [];
       for (const candidate of queue) {
+        const rtcCandidate = toRtcIceCandidate(candidate);
+        if (!rtcCandidate) continue;
         try {
-          await peerConnection.addIceCandidate(candidate);
+          await peerConnection.addIceCandidate(rtcCandidate);
         } catch (_error) {}
       }
     }
@@ -2274,6 +2306,7 @@
           sdp: answer,
         });
         setVideoStatus("Connecting...");
+        scheduleConnectionWatchdog(20000, "Unable to establish video connection");
       } catch (_error) {
         endVideoCall({ notifyPeer: false, reason: "Failed to connect call" });
       }
@@ -2285,6 +2318,7 @@
         await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
         await flushPendingIceCandidates();
         setVideoStatus("Connecting...");
+        scheduleConnectionWatchdog(20000, "Unable to establish video connection");
       } catch (_error) {
         endVideoCall({ notifyPeer: false, reason: "Call answer failed" });
       }
@@ -2296,8 +2330,10 @@
         pendingIceCandidates.push(candidate);
         return;
       }
+      const rtcCandidate = toRtcIceCandidate(candidate);
+      if (!rtcCandidate) return;
       try {
-        await peerConnection.addIceCandidate(candidate);
+        await peerConnection.addIceCandidate(rtcCandidate);
       } catch (_error) {}
     });
     socket.on("webrtc-hangup", ({ fromUserId, targetUserId }) => {
