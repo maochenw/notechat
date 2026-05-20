@@ -128,6 +128,7 @@
   <script>
     const TAB_STORAGE_KEY = "notechat_tab_token";
     const LAST_LOGIN_AT_KEY = "notechat_last_login_at";
+    const LOGIN_HISTORY_KEY = "notechat_login_history";
     const params = new URLSearchParams(window.location.search);
     const errorEl = document.getElementById("error");
     const form = document.getElementById("access-form");
@@ -137,6 +138,22 @@
 
     if (params.get("error") === "1") {
       errorEl.classList.add("visible");
+    }
+
+    function updateLoginHistory(tabToken, loginAt) {
+      if (!tabToken || !Number.isFinite(loginAt) || loginAt <= 0) return;
+      try {
+        const parsed = JSON.parse(localStorage.getItem(LOGIN_HISTORY_KEY) || "[]");
+        const history = Array.isArray(parsed) ? parsed : [];
+        const idx = history.findIndex((item) => `${item?.key || ""}` === tabToken);
+        if (idx >= 0) {
+          history[idx].lastLoginAt = loginAt;
+        } else {
+          history.push({ key: tabToken, name: "", lastLoginAt: loginAt });
+        }
+        history.sort((a, b) => (Number(b?.lastLoginAt) || 0) - (Number(a?.lastLoginAt) || 0));
+        localStorage.setItem(LOGIN_HISTORY_KEY, JSON.stringify(history.slice(0, 30)));
+      } catch (_error) {}
     }
 
     form.addEventListener("submit", async (event) => {
@@ -157,9 +174,11 @@
         }
 
         const data = await response.json();
+        const loginAt = Date.now();
         try {
-          localStorage.setItem(LAST_LOGIN_AT_KEY, `${Date.now()}`);
+          localStorage.setItem(LAST_LOGIN_AT_KEY, `${loginAt}`);
         } catch (_error) {}
+        updateLoginHistory(data.tabToken, loginAt);
         sessionStorage.setItem(TAB_STORAGE_KEY, data.tabToken);
         window.location.replace("/app");
       } catch (_error) {

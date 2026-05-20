@@ -1409,10 +1409,11 @@
         if (!Array.isArray(parsed)) return [];
         return parsed
           .map((item) => ({
+            key: `${item?.key || ""}`.trim(),
             name: `${item?.name || ""}`.trim().slice(0, 30),
             lastLoginAt: Number(item?.lastLoginAt) || 0,
           }))
-          .filter((item) => item.name && Number.isFinite(item.lastLoginAt) && item.lastLoginAt > 0)
+          .filter((item) => item.key && Number.isFinite(item.lastLoginAt) && item.lastLoginAt > 0)
           .sort((a, b) => b.lastLoginAt - a.lastLoginAt)
           .slice(0, 12);
       } catch (_error) {
@@ -1427,20 +1428,27 @@
     }
 
     function upsertLoginHistory(name) {
+      if (!tabToken) return;
       const safeName = `${name || ""}`.trim().slice(0, 30);
-      if (!safeName) return;
+      const history = readLoginHistory();
+      const existingIdx = history.findIndex((item) => item.key === tabToken);
       const rawTs = Number(localStorage.getItem(LAST_LOGIN_AT_KEY));
       const loginAt = Number.isFinite(rawTs) && rawTs > 0 ? rawTs : Date.now();
-      const history = readLoginHistory();
-      const existingIdx = history.findIndex((item) => item.name.toLowerCase() === safeName.toLowerCase());
+
       if (existingIdx >= 0) {
-        history[existingIdx].name = safeName;
+        if (safeName) {
+          history[existingIdx].name = safeName;
+        }
         history[existingIdx].lastLoginAt = loginAt;
       } else {
-        history.push({ name: safeName, lastLoginAt: loginAt });
+        history.push({
+          key: tabToken,
+          name: safeName,
+          lastLoginAt: loginAt,
+        });
       }
       history.sort((a, b) => b.lastLoginAt - a.lastLoginAt);
-      saveLoginHistory(history.slice(0, 20));
+      saveLoginHistory(history.slice(0, 30));
     }
 
     function formatJoinDate(ts) {
@@ -1474,7 +1482,8 @@
 
         const nameEl = document.createElement("span");
         nameEl.className = "login-history-name";
-        nameEl.textContent = entry.name;
+        const fallbackId = entry.key.slice(0, 6);
+        nameEl.textContent = entry.name || `Guest ${fallbackId}`;
 
         const timeEl = document.createElement("span");
         timeEl.className = "login-history-time";
@@ -1489,39 +1498,6 @@
       loginHistoryEl.appendChild(title);
       loginHistoryEl.appendChild(list);
       loginHistoryEl.style.display = "block";
-    }
-
-    function consumeLatestLoginTs() {
-      try {
-        const raw = Number(localStorage.getItem(LAST_LOGIN_AT_KEY));
-        if (Number.isFinite(raw) && raw > 0) {
-          localStorage.removeItem(LAST_LOGIN_AT_KEY);
-        }
-      } catch (_error) {}
-    }
-
-    function renderLastLoginTime() {
-      if (!loginHistoryEl) return;
-      try {
-        const raw = Number(localStorage.getItem(LAST_LOGIN_AT_KEY));
-        if (!Number.isFinite(raw) || raw <= 0) return;
-        const lastLoginText = new Date(raw).toLocaleString([], {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        });
-        const history = readLoginHistory();
-        const pseudo = document.createElement("div");
-        pseudo.className = "login-history-title";
-        pseudo.textContent = `Current access: ${lastLoginText}`;
-        if (!history.length) {
-          loginHistoryEl.innerHTML = "";
-          loginHistoryEl.appendChild(pseudo);
-          loginHistoryEl.style.display = "block";
-        }
-      } catch (_error) {
-      }
     }
 
     function escapeHtml(str) {
@@ -2233,7 +2209,6 @@
       const room = roomInput.value.trim();
       if (!name || !room) return;
       upsertLoginHistory(name);
-      consumeLatestLoginTs();
       renderLoginHistory();
       if (callActive) {
         endVideoCall({ notifyPeer: true, reason: "Video is off" });
@@ -2260,7 +2235,17 @@
 
     joinBtn.addEventListener("click", joinRoom);
     roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
-    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") roomInput.focus(); });
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        upsertLoginHistory(nameInput.value);
+        renderLoginHistory();
+        roomInput.focus();
+      }
+    });
+    nameInput.addEventListener("blur", () => {
+      upsertLoginHistory(nameInput.value);
+      renderLoginHistory();
+    });
     openStickersBtn.addEventListener("click", () => {
       stickersScreen.style.display = "flex";
     });
@@ -2837,7 +2822,6 @@
 
     loadRtcConfig();
     renderLoginHistory();
-    renderLastLoginTime();
     setVideoStatus("Video is off");
     updateVideoButtons();
 
