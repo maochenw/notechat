@@ -41,11 +41,48 @@
       margin-bottom: 1.5rem;
       font-size: .95rem;
     }
-    #join-screen .last-login {
-      color: #64748b;
+    #join-screen .login-history {
       margin-top: -1rem;
       margin-bottom: 1rem;
+      text-align: left;
+      border: 1px solid #233247;
+      border-radius: 10px;
+      background: #111c2d;
+      padding: .6rem .7rem;
+      display: none;
+    }
+    #join-screen .login-history-title {
+      color: #94a3b8;
+      font-size: .72rem;
+      letter-spacing: .02em;
+      margin-bottom: .35rem;
+      text-transform: uppercase;
+    }
+    #join-screen .login-history-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: .25rem;
+    }
+    #join-screen .login-history-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
       font-size: .78rem;
+      color: #cbd5e1;
+      min-width: 0;
+    }
+    #join-screen .login-history-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+    #join-screen .login-history-time {
+      color: #94a3b8;
+      flex-shrink: 0;
     }
     .form-input {
       width: 100%;
@@ -1097,7 +1134,7 @@
     <div class="join-inner">
       <h1>NoteChat</h1>
       <p class="subtitle">Enter a room number to join or create a chat room.</p>
-      <p class="last-login" id="last-login-time"></p>
+      <div class="login-history" id="login-history"></div>
       <input id="name-input" class="form-input" type="text" placeholder="Your name" maxlength="30" autofocus>
       <input id="room-input" class="form-input" type="text" placeholder="Room number" maxlength="20">
       <button class="btn-primary" id="join-btn">Join Room</button>
@@ -1230,6 +1267,7 @@
   <script>
     const TAB_STORAGE_KEY = "notechat_tab_token";
     const LAST_LOGIN_AT_KEY = "notechat_last_login_at";
+    const LOGIN_HISTORY_KEY = "notechat_login_history";
     const tabToken = sessionStorage.getItem(TAB_STORAGE_KEY);
 
     if (!tabToken) {
@@ -1249,7 +1287,7 @@
     });
 
     const joinScreen   = document.getElementById("join-screen");
-    const lastLoginTimeEl = document.getElementById("last-login-time");
+    const loginHistoryEl = document.getElementById("login-history");
     const chatScreen   = document.getElementById("chat-screen");
     const nameInput    = document.getElementById("name-input");
     const roomInput    = document.getElementById("room-input");
@@ -1365,26 +1403,124 @@
       return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
 
-    function renderLastLoginTime() {
-      if (!lastLoginTimeEl) return;
+    function readLoginHistory() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(LOGIN_HISTORY_KEY) || "[]");
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .map((item) => ({
+            name: `${item?.name || ""}`.trim().slice(0, 30),
+            lastLoginAt: Number(item?.lastLoginAt) || 0,
+          }))
+          .filter((item) => item.name && Number.isFinite(item.lastLoginAt) && item.lastLoginAt > 0)
+          .sort((a, b) => b.lastLoginAt - a.lastLoginAt)
+          .slice(0, 12);
+      } catch (_error) {
+        return [];
+      }
+    }
+
+    function saveLoginHistory(history) {
+      try {
+        localStorage.setItem(LOGIN_HISTORY_KEY, JSON.stringify(history));
+      } catch (_error) {}
+    }
+
+    function upsertLoginHistory(name) {
+      const safeName = `${name || ""}`.trim().slice(0, 30);
+      if (!safeName) return;
+      const rawTs = Number(localStorage.getItem(LAST_LOGIN_AT_KEY));
+      const loginAt = Number.isFinite(rawTs) && rawTs > 0 ? rawTs : Date.now();
+      const history = readLoginHistory();
+      const existingIdx = history.findIndex((item) => item.name.toLowerCase() === safeName.toLowerCase());
+      if (existingIdx >= 0) {
+        history[existingIdx].name = safeName;
+        history[existingIdx].lastLoginAt = loginAt;
+      } else {
+        history.push({ name: safeName, lastLoginAt: loginAt });
+      }
+      history.sort((a, b) => b.lastLoginAt - a.lastLoginAt);
+      saveLoginHistory(history.slice(0, 20));
+    }
+
+    function formatJoinDate(ts) {
+      return new Date(ts).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+
+    function renderLoginHistory() {
+      if (!loginHistoryEl) return;
+      const history = readLoginHistory();
+      if (!history.length) {
+        loginHistoryEl.innerHTML = "";
+        loginHistoryEl.style.display = "none";
+        return;
+      }
+
+      const title = document.createElement("div");
+      title.className = "login-history-title";
+      title.textContent = "Recent Logins On This Device";
+
+      const list = document.createElement("ul");
+      list.className = "login-history-list";
+
+      history.forEach((entry) => {
+        const item = document.createElement("li");
+        item.className = "login-history-item";
+
+        const nameEl = document.createElement("span");
+        nameEl.className = "login-history-name";
+        nameEl.textContent = entry.name;
+
+        const timeEl = document.createElement("span");
+        timeEl.className = "login-history-time";
+        timeEl.textContent = formatJoinDate(entry.lastLoginAt);
+
+        item.appendChild(nameEl);
+        item.appendChild(timeEl);
+        list.appendChild(item);
+      });
+
+      loginHistoryEl.innerHTML = "";
+      loginHistoryEl.appendChild(title);
+      loginHistoryEl.appendChild(list);
+      loginHistoryEl.style.display = "block";
+    }
+
+    function consumeLatestLoginTs() {
       try {
         const raw = Number(localStorage.getItem(LAST_LOGIN_AT_KEY));
-        if (!Number.isFinite(raw) || raw <= 0) {
-          lastLoginTimeEl.textContent = "";
-          lastLoginTimeEl.style.display = "none";
-          return;
+        if (Number.isFinite(raw) && raw > 0) {
+          localStorage.removeItem(LAST_LOGIN_AT_KEY);
         }
+      } catch (_error) {}
+    }
+
+    function renderLastLoginTime() {
+      if (!loginHistoryEl) return;
+      try {
+        const raw = Number(localStorage.getItem(LAST_LOGIN_AT_KEY));
+        if (!Number.isFinite(raw) || raw <= 0) return;
         const lastLoginText = new Date(raw).toLocaleString([], {
           month: "short",
           day: "numeric",
           hour: "numeric",
           minute: "2-digit",
         });
-        lastLoginTimeEl.textContent = `Latest login: ${lastLoginText}`;
-        lastLoginTimeEl.style.display = "block";
+        const history = readLoginHistory();
+        const pseudo = document.createElement("div");
+        pseudo.className = "login-history-title";
+        pseudo.textContent = `Current access: ${lastLoginText}`;
+        if (!history.length) {
+          loginHistoryEl.innerHTML = "";
+          loginHistoryEl.appendChild(pseudo);
+          loginHistoryEl.style.display = "block";
+        }
       } catch (_error) {
-        lastLoginTimeEl.textContent = "";
-        lastLoginTimeEl.style.display = "none";
       }
     }
 
@@ -2096,6 +2232,9 @@
       const name = nameInput.value.trim().slice(0, 30);
       const room = roomInput.value.trim();
       if (!name || !room) return;
+      upsertLoginHistory(name);
+      consumeLatestLoginTs();
+      renderLoginHistory();
       if (callActive) {
         endVideoCall({ notifyPeer: true, reason: "Video is off" });
       }
@@ -2697,6 +2836,7 @@
     });
 
     loadRtcConfig();
+    renderLoginHistory();
     renderLastLoginTime();
     setVideoStatus("Video is off");
     updateVideoButtons();
