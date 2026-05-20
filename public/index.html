@@ -41,6 +41,12 @@
       margin-bottom: 1.5rem;
       font-size: .95rem;
     }
+    #join-screen .last-login {
+      color: #64748b;
+      margin-top: -1rem;
+      margin-bottom: 1rem;
+      font-size: .78rem;
+    }
     .form-input {
       width: 100%;
       padding: .75rem 1rem;
@@ -1091,6 +1097,7 @@
     <div class="join-inner">
       <h1>NoteChat</h1>
       <p class="subtitle">Enter a room number to join or create a chat room.</p>
+      <p class="last-login" id="last-login-time"></p>
       <input id="name-input" class="form-input" type="text" placeholder="Your name" maxlength="30" autofocus>
       <input id="room-input" class="form-input" type="text" placeholder="Room number" maxlength="20">
       <button class="btn-primary" id="join-btn">Join Room</button>
@@ -1222,6 +1229,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const TAB_STORAGE_KEY = "notechat_tab_token";
+    const LAST_LOGIN_AT_KEY = "notechat_last_login_at";
     const tabToken = sessionStorage.getItem(TAB_STORAGE_KEY);
 
     if (!tabToken) {
@@ -1241,6 +1249,7 @@
     });
 
     const joinScreen   = document.getElementById("join-screen");
+    const lastLoginTimeEl = document.getElementById("last-login-time");
     const chatScreen   = document.getElementById("chat-screen");
     const nameInput    = document.getElementById("name-input");
     const roomInput    = document.getElementById("room-input");
@@ -1354,6 +1363,29 @@
 
     function formatTime(ts) {
       return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function renderLastLoginTime() {
+      if (!lastLoginTimeEl) return;
+      try {
+        const raw = Number(localStorage.getItem(LAST_LOGIN_AT_KEY));
+        if (!Number.isFinite(raw) || raw <= 0) {
+          lastLoginTimeEl.textContent = "";
+          lastLoginTimeEl.style.display = "none";
+          return;
+        }
+        const lastLoginText = new Date(raw).toLocaleString([], {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        lastLoginTimeEl.textContent = `Latest login: ${lastLoginText}`;
+        lastLoginTimeEl.style.display = "block";
+      } catch (_error) {
+        lastLoginTimeEl.textContent = "";
+        lastLoginTimeEl.style.display = "none";
+      }
     }
 
     function escapeHtml(str) {
@@ -2665,6 +2697,7 @@
     });
 
     loadRtcConfig();
+    renderLastLoginTime();
     setVideoStatus("Video is off");
     updateVideoButtons();
 

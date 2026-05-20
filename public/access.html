@@ -127,6 +127,7 @@
 
   <script>
     const TAB_STORAGE_KEY = "notechat_tab_token";
+    const LAST_LOGIN_AT_KEY = "notechat_last_login_at";
     const params = new URLSearchParams(window.location.search);
     const errorEl = document.getElementById("error");
     const form = document.getElementById("access-form");
@@ -156,6 +157,9 @@
         }
 
         const data = await response.json();
+        try {
+          localStorage.setItem(LAST_LOGIN_AT_KEY, `${Date.now()}`);
+        } catch (_error) {}
         sessionStorage.setItem(TAB_STORAGE_KEY, data.tabToken);
         window.location.replace("/app");
       } catch (_error) {
