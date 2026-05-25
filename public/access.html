@@ -8,23 +8,26 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0f172a;
-      --panel: #1e293b;
-      --panel-border: #334155;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --accent: #6366f1;
-      --accent-hover: #4f46e5;
+      --bg-base: #f8fbff;
+      --bg-top: #ffffff;
+      --bg-bottom: #eaf3fd;
+      --panel: #ffffff;
+      --panel-soft: #f3f8ff;
+      --panel-border: #bfd0e2;
+      --text: #253240;
+      --muted: #5e7d99;
+      --accent: #384959;
+      --accent-hover: #2f3c4a;
       --danger: #f87171;
     }
 
     html, body {
       min-height: 100%;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Avenir Next", "SF Pro Text", "Segoe UI", -apple-system, sans-serif;
       background:
-        radial-gradient(circle at top right, rgba(99, 102, 241, 0.18), transparent 35%),
-        radial-gradient(circle at bottom left, rgba(30, 41, 59, 0.55), transparent 30%),
-        var(--bg);
+        radial-gradient(1200px 520px at 20% -10%, rgba(189, 221, 252, .18), transparent 60%),
+        radial-gradient(900px 420px at 100% 0%, rgba(136, 189, 242, .14), transparent 55%),
+        linear-gradient(160deg, var(--bg-top), var(--bg-bottom) 45%, var(--bg-base));
       color: var(--text);
     }
 
@@ -39,10 +42,10 @@
       width: 100%;
       max-width: 420px;
       padding: 28px;
-      background: rgba(30, 41, 59, 0.92);
+      background: var(--panel);
       border: 1px solid var(--panel-border);
       border-radius: 18px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 16px 34px rgba(56, 73, 89, .14);
       backdrop-filter: blur(10px);
     }
 
@@ -62,7 +65,7 @@
       display: block;
       font-size: 0.9rem;
       margin-bottom: 8px;
-      color: #cbd5e1;
+      color: var(--muted);
     }
 
     input {
@@ -70,7 +73,7 @@
       border: 1px solid var(--panel-border);
       border-radius: 12px;
       padding: 14px 16px;
-      background: #0f172a;
+      background: #fff;
       color: var(--text);
       font-size: 1rem;
       outline: none;
@@ -91,6 +94,7 @@
       font-weight: 700;
       font-size: 1rem;
       cursor: pointer;
+      letter-spacing: .01em;
     }
 
     button:hover {
@@ -127,8 +131,7 @@
 
   <script>
     const TAB_STORAGE_KEY = "notechat_tab_token";
-    const LAST_LOGIN_AT_KEY = "notechat_last_login_at";
-    const LOGIN_HISTORY_KEY = "notechat_login_history";
+    const DEVICE_ID_KEY = "notechat_device_id";
     const params = new URLSearchParams(window.location.search);
     const errorEl = document.getElementById("error");
     const form = document.getElementById("access-form");
@@ -140,20 +143,27 @@
       errorEl.classList.add("visible");
     }
 
-    function updateLoginHistory(tabToken, loginAt) {
-      if (!tabToken || !Number.isFinite(loginAt) || loginAt <= 0) return;
+    function getOrCreateDeviceId() {
       try {
-        const parsed = JSON.parse(localStorage.getItem(LOGIN_HISTORY_KEY) || "[]");
-        const history = Array.isArray(parsed) ? parsed : [];
-        const idx = history.findIndex((item) => `${item?.key || ""}` === tabToken);
-        if (idx >= 0) {
-          history[idx].lastLoginAt = loginAt;
-        } else {
-          history.push({ key: tabToken, name: "", lastLoginAt: loginAt });
-        }
-        history.sort((a, b) => (Number(b?.lastLoginAt) || 0) - (Number(a?.lastLoginAt) || 0));
-        localStorage.setItem(LOGIN_HISTORY_KEY, JSON.stringify(history.slice(0, 30)));
-      } catch (_error) {}
+        const existing = `${localStorage.getItem(DEVICE_ID_KEY) || ""}`.trim();
+        if (existing) return existing;
+        const next = typeof crypto?.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `dev-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+        localStorage.setItem(DEVICE_ID_KEY, next);
+        return next;
+      } catch (_error) {
+        return typeof crypto?.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `dev-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+      }
+    }
+
+    function getDeviceLabel() {
+      const platform = `${navigator.userAgentData?.platform || navigator.platform || "Unknown"}`.trim();
+      const ua = `${navigator.userAgent || ""}`;
+      const isMobile = navigator.userAgentData?.mobile ?? /mobile|iphone|ipad|android/i.test(ua);
+      return `${platform} ${isMobile ? "Mobile" : "Desktop"}`.trim();
     }
 
     form.addEventListener("submit", async (event) => {
@@ -165,7 +175,11 @@
       try {
         const response = await fetch("/access-token", {
           method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "x-device-id": getOrCreateDeviceId(),
+            "x-device-name": getDeviceLabel(),
+          },
           body,
         });
 
@@ -174,11 +188,6 @@
         }
 
         const data = await response.json();
-        const loginAt = Date.now();
-        try {
-          localStorage.setItem(LAST_LOGIN_AT_KEY, `${loginAt}`);
-        } catch (_error) {}
-        updateLoginHistory(data.tabToken, loginAt);
         sessionStorage.setItem(TAB_STORAGE_KEY, data.tabToken);
         window.location.replace("/app");
       } catch (_error) {

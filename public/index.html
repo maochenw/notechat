@@ -6,11 +6,31 @@
   <title>NoteChat</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-base: #f8fbff;
+      --bg-top: #ffffff;
+      --bg-bottom: #eaf3fd;
+      --panel: #ffffff;
+      --panel-soft: #f3f8ff;
+      --panel-border: #bfd0e2;
+      --text-main: #384959;
+      --text-strong: #253240;
+      --text-muted: #5e7d99;
+      --accent: #384959;
+      --accent-strong: #2f3c4a;
+      --accent-soft: rgba(56, 73, 89, .08);
+      --radius-sm: 8px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
 
     html, body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      font-family: "Avenir Next", "SF Pro Text", "Segoe UI", -apple-system, sans-serif;
+      background:
+        radial-gradient(1200px 520px at 20% -10%, rgba(189, 221, 252, .18), transparent 62%),
+        radial-gradient(900px 420px at 100% 0%, rgba(136, 189, 242, .14), transparent 58%),
+        linear-gradient(160deg, var(--bg-top), var(--bg-bottom) 45%, var(--bg-base));
+      color: var(--text-main);
       height: 100%;
       height: 100dvh;
       overflow: hidden;
@@ -30,14 +50,19 @@
       width: 100%;
       max-width: 420px;
       text-align: center;
+      padding: 1rem;
+      border-radius: 18px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      box-shadow: 0 10px 24px rgba(56, 73, 89, .14);
     }
     #join-screen h1 {
       font-size: 2rem;
       margin-bottom: .25rem;
-      color: #f8fafc;
+      color: var(--text-strong);
     }
     #join-screen .subtitle {
-      color: #94a3b8;
+      color: var(--text-muted);
       margin-bottom: 1.5rem;
       font-size: .95rem;
     }
@@ -45,14 +70,14 @@
       margin-top: -1rem;
       margin-bottom: 1rem;
       text-align: left;
-      border: 1px solid #233247;
+      border: 1px solid var(--panel-border);
       border-radius: 10px;
-      background: #111c2d;
+      background: var(--panel-soft);
       padding: .6rem .7rem;
       display: none;
     }
     #join-screen .login-history-title {
-      color: #94a3b8;
+      color: var(--text-muted);
       font-size: .72rem;
       letter-spacing: .02em;
       margin-bottom: .35rem;
@@ -70,7 +95,7 @@
       justify-content: space-between;
       gap: .5rem;
       font-size: .78rem;
-      color: #cbd5e1;
+      color: var(--text-muted);
       min-width: 0;
     }
     #join-screen .login-history-name {
@@ -78,52 +103,52 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       font-weight: 600;
-      color: #e2e8f0;
+      color: var(--text-strong);
     }
     #join-screen .login-history-time {
-      color: #94a3b8;
+      color: var(--text-muted);
       flex-shrink: 0;
     }
     .form-input {
       width: 100%;
       padding: .75rem 1rem;
       margin-bottom: .75rem;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      background: #1e293b;
-      color: #f8fafc;
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text-strong);
       font-size: 1rem;
       outline: none;
       transition: border-color .2s;
     }
-    .form-input:focus { border-color: #6366f1; }
+    .form-input:focus { border-color: var(--accent); }
     .btn-primary {
       width: 100%;
       padding: .75rem;
       border: none;
-      border-radius: 8px;
-      background: #6366f1;
+      border-radius: 10px;
+      background: var(--accent);
       color: #fff;
       font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
       transition: background .2s;
     }
-    .btn-primary:hover { background: #4f46e5; }
+    .btn-primary:hover { background: var(--accent-strong); }
 
     .divider {
       display: flex;
       align-items: center;
       gap: .75rem;
       margin: 1.5rem 0;
-      color: #475569;
+      color: #5d7690;
       font-size: .8rem;
     }
     .divider::before, .divider::after {
       content: "";
       flex: 1;
       height: 1px;
-      background: #334155;
+      background: var(--panel-border);
     }
 
     /* ── Schedule form ── */
@@ -212,17 +237,17 @@
     }
     .btn-secondary {
       padding: .75rem 1rem;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      background: #1e293b;
-      color: #a5b4fc;
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text-strong);
       font-size: .85rem;
       font-weight: 600;
       cursor: pointer;
       white-space: nowrap;
       transition: border-color .2s, color .2s;
     }
-    .btn-secondary:hover { border-color: #6366f1; color: #f8fafc; }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--text-strong); }
 
     /* ── Scheduled rooms list ── */
     .scheduled-list {
@@ -232,7 +257,7 @@
     }
     .scheduled-list .empty {
       text-align: center;
-      color: #475569;
+      color: var(--text-muted);
       font-size: .85rem;
       padding: .75rem 0;
     }
@@ -242,14 +267,14 @@
       justify-content: space-between;
       padding: .6rem .85rem;
       margin-bottom: .4rem;
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 8px;
+      background: var(--panel-soft);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
       cursor: pointer;
       transition: border-color .2s;
       gap: .5rem;
     }
-    .scheduled-item:hover { border-color: #6366f1; }
+    .scheduled-item:hover { border-color: var(--accent); }
     .scheduled-item .room-info {
       display: flex;
       align-items: baseline;
@@ -260,12 +285,12 @@
     .scheduled-item .room-num {
       font-weight: 700;
       font-size: 1rem;
-      color: #f8fafc;
+      color: var(--text-strong);
       flex-shrink: 0;
     }
     .scheduled-item .room-time {
       font-size: .85rem;
-      color: #a5b4fc;
+      color: var(--text-muted);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -273,7 +298,7 @@
     .scheduled-item .remove-sched {
       background: none;
       border: none;
-      color: #64748b;
+      color: var(--text-muted);
       font-size: 1.2rem;
       cursor: pointer;
       padding: .1rem .4rem;
@@ -285,7 +310,7 @@
     /* ── Sticker section (landing page) ── */
     .sticker-launch .hint {
       margin-top: .45rem;
-      color: #64748b;
+      color: var(--text-muted);
       font-size: .75rem;
       text-align: center;
     }
@@ -298,7 +323,7 @@
       margin-top: .75rem;
     }
     .sticker-grid .empty {
-      color: #475569;
+      color: var(--text-muted);
       font-size: .85rem;
       padding: .75rem 0;
       width: 100%;
@@ -312,9 +337,9 @@
     .sticker-thumb img {
       width: 64px;
       height: 64px;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       object-fit: cover;
-      border: 1px solid #334155;
+      border: 1px solid var(--panel-border);
     }
     .sticker-thumb .remove-sticker {
       position: absolute;
@@ -341,9 +366,9 @@
       width: 20px;
       height: 20px;
       border-radius: 50%;
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #64748b;
+      border: 1px solid var(--panel-border);
+      background: #0d1c2d;
+      color: var(--text-muted);
       font-size: .7rem;
       cursor: pointer;
       display: flex;
@@ -361,7 +386,7 @@
       left: 4px;
       bottom: 4px;
       font-size: .6rem;
-      color: #e2e8f0;
+      color: #fff;
       background: rgba(15, 23, 42, .75);
       border-radius: 4px;
       padding: 1px 4px;
@@ -378,7 +403,7 @@
       flex-direction: column;
       position: fixed;
       inset: 0;
-      background: #0f172a;
+      background: var(--bg-base);
       z-index: 40;
     }
     .stickers-header {
@@ -387,17 +412,35 @@
       justify-content: space-between;
       gap: .6rem;
       padding: .75rem 1rem;
-      border-bottom: 1px solid #334155;
-      background: #1e293b;
+      border-bottom: 1px solid var(--panel-border);
+      background: var(--panel);
       flex-shrink: 0;
     }
     .stickers-header .title {
       font-weight: 700;
-      color: #f8fafc;
+      color: var(--text-strong);
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .stickers-header #close-stickers-btn {
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: var(--panel-soft);
+      color: var(--text-strong);
+      font-size: .85rem;
+      font-weight: 600;
+      min-height: 36px;
+      padding: .6rem .95rem;
+      cursor: pointer;
+      line-height: 1;
+      transition: border-color .2s, color .2s, background .2s;
+    }
+    .stickers-header #close-stickers-btn:hover {
+      border-color: var(--accent);
+      color: #fff;
+      background: var(--accent);
     }
     .stickers-body {
       flex: 1;
@@ -406,17 +449,17 @@
       padding: .9rem 1rem 1.2rem;
     }
     .stickers-body .hint {
-      color: #64748b;
+      color: var(--text-muted);
       font-size: .75rem;
       text-align: center;
       margin-top: .2rem;
     }
     .stickers-body .sticker-search {
       margin-top: .85rem;
-      border: 1px solid #334155;
+      border: 1px solid var(--panel-border);
       border-radius: 10px;
       padding: .6rem;
-      background: #111b2d;
+      background: var(--panel-soft);
     }
     .stickers-body .sticker-search-row {
       display: flex;
@@ -453,10 +496,10 @@
       position: absolute;
       right: 4px;
       bottom: 4px;
-      border: 1px solid #334155;
-      background: rgba(15, 23, 42, .92);
-      color: #e2e8f0;
-      border-radius: 999px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+      border-radius: var(--radius-md);
       font-size: .62rem;
       line-height: 1;
       padding: .18rem .42rem;
@@ -472,10 +515,10 @@
       display: none;
       flex-direction: column;
       width: 100%;
-      height: 100%;
       height: 100dvh;
       position: fixed;
-      inset: 0;
+      top: 0;
+      left: 0;
       overflow: hidden;
     }
 
@@ -485,8 +528,8 @@
       justify-content: space-between;
       gap: .75rem;
       padding: .75rem 1rem;
-      background: #1e293b;
-      border-bottom: 1px solid #334155;
+      background: var(--panel);
+      border-bottom: 1px solid var(--panel-border);
       flex-shrink: 0;
       position: sticky;
       top: 0;
@@ -509,25 +552,25 @@
       font-size: .9rem;
       padding: .28rem .55rem;
       border-radius: 999px;
-      background: rgba(99, 102, 241, .18);
-      border: 1px solid rgba(99, 102, 241, .45);
-      color: #e2e8f0;
+      background: var(--accent-soft);
+      border: 1px solid var(--panel-border);
+      color: var(--text-strong);
       white-space: nowrap;
     }
     .chat-header .user-count {
       font-size: .78rem;
-      color: #cbd5e1;
+      color: var(--text-muted);
       line-height: 1;
       padding: .28rem .55rem;
       border-radius: 999px;
-      border: 1px solid #334155;
-      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      background: var(--panel-soft);
       white-space: nowrap;
     }
     .chat-header .typing-indicator {
       min-height: 1.05em;
       font-size: .72rem;
-      color: #a5b4fc;
+      color: var(--accent);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -541,7 +584,7 @@
       content: "●";
       display: inline-block;
       margin-right: .35rem;
-      color: #6366f1;
+      color: var(--accent);
       transform: translateY(-1px);
     }
     .chat-header .header-actions {
@@ -551,18 +594,19 @@
       flex-shrink: 0;
     }
     .chat-header button {
-      background: none;
-      border: 1px solid #475569;
-      color: #94a3b8;
+      background: var(--panel-soft);
+      border: 1px solid var(--panel-border);
+      color: var(--text-strong);
       padding: .4rem .75rem;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: .85rem;
     }
-    .chat-header button:hover { color: #f8fafc; border-color: #94a3b8; }
+    .chat-header button:hover { color: #fff; border-color: var(--accent); background: var(--accent); }
     .chat-header #video-call-btn.active {
-      color: #86efac;
-      border-color: #22c55e;
+      color: #fff;
+      border-color: var(--accent);
+      background: var(--accent);
     }
     .chat-header .clear-btn:hover {
       color: #fecaca;
@@ -581,8 +625,8 @@
     .stats-strip {
       display: none;
       padding: .45rem .75rem;
-      border-bottom: 1px solid #334155;
-      background: #162235;
+      border-bottom: 1px solid var(--panel-border);
+      background: var(--panel-soft);
       gap: .4rem;
       overflow-x: auto;
       white-space: nowrap;
@@ -597,26 +641,26 @@
       align-items: center;
       gap: .35rem;
       font-size: .7rem;
-      color: #cbd5e1;
-      border: 1px solid #334155;
+      color: var(--text-muted);
+      border: 1px solid var(--panel-border);
       border-radius: 999px;
-      background: #0f172a;
+      background: var(--panel);
       padding: .25rem .55rem;
       flex-shrink: 0;
     }
     .stats-pill strong {
-      color: #e2e8f0;
+      color: var(--text-strong);
       font-weight: 600;
     }
     .video-panel {
       display: none;
       flex-shrink: 0;
-      width: min(82%, 380px);
+      width: min(88%, 560px);
       margin: .5rem .75rem .35rem;
       padding: .45rem;
-      border-radius: 12px;
-      border: 1px solid #334155;
-      background: #0b1424;
+      border-radius: 14px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
       flex-direction: column;
       gap: .45rem;
     }
@@ -628,15 +672,15 @@
       align-items: center;
       justify-content: space-between;
       gap: .4rem;
-      color: #cbd5e1;
+      color: var(--text-muted);
       font-size: .74rem;
       line-height: 1.2;
     }
     .video-panel .video-head button {
-      border: 1px solid #475569;
-      border-radius: 999px;
-      background: #0f172a;
-      color: #cbd5e1;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      background: var(--panel-soft);
+      color: var(--text-strong);
       font-size: .7rem;
       padding: .22rem .55rem;
       cursor: pointer;
@@ -650,13 +694,13 @@
     .video-panel .video-stage {
       position: relative;
       width: 100%;
-      min-height: 210px;
-      max-height: 300px;
-      aspect-ratio: 4 / 3;
-      border-radius: 10px;
+      min-height: 280px;
+      max-height: 380px;
+      aspect-ratio: 16 / 10;
+      border-radius: 12px;
       overflow: hidden;
       background: #020617;
-      border: 1px solid #334155;
+      border: 1px solid var(--panel-border);
     }
     .video-panel video {
       width: 100%;
@@ -673,10 +717,32 @@
       bottom: .45rem;
       width: 78px;
       height: 104px;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       border: 1px solid rgba(148, 163, 184, .65);
-      box-shadow: 0 6px 18px rgba(2, 6, 23, .45);
+      box-shadow: 0 4px 12px rgba(2, 6, 23, .28);
       background: #0f172a;
+    }
+    .video-panel.swapped-view #local-video {
+      position: static;
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+      border: 0;
+      box-shadow: none;
+      object-fit: contain;
+    }
+    .video-panel.swapped-view #remote-video {
+      position: absolute;
+      right: .45rem;
+      bottom: .45rem;
+      width: 78px;
+      height: 104px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(148, 163, 184, .65);
+      box-shadow: 0 4px 12px rgba(2, 6, 23, .28);
+      background: #0f172a;
+      object-fit: cover;
+      z-index: 2;
     }
     .video-panel .video-actions {
       display: flex;
@@ -686,17 +752,18 @@
       flex-wrap: wrap;
     }
     .video-panel .video-actions button {
-      border: 1px solid #334155;
-      border-radius: 999px;
-      background: #0f172a;
-      color: #cbd5e1;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      background: var(--panel-soft);
+      color: var(--text-strong);
       font-size: .72rem;
       padding: .28rem .55rem;
       cursor: pointer;
     }
     .video-panel .video-actions button.active {
-      border-color: #6366f1;
-      color: #c4b5fd;
+      border-color: var(--accent);
+      color: #fff;
+      background: var(--accent);
     }
     .video-panel .video-actions button.danger {
       border-color: #ef4444;
@@ -706,7 +773,7 @@
     .msg {
       max-width: 80%;
       padding: .6rem .9rem;
-      border-radius: 12px;
+      border-radius: var(--radius-lg);
       line-height: 1.45;
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -716,21 +783,21 @@
       align-self: center;
       max-width: 100%;
       background: none;
-      color: #64748b;
+      color: var(--text-muted);
       font-size: .8rem;
       text-align: center;
       padding: .25rem 0;
     }
     .msg.self {
       align-self: flex-end;
-      background: #6366f1;
+      background: var(--accent);
       color: #fff;
-      border-bottom-right-radius: 4px;
+      border-bottom-right-radius: 8px;
     }
     .msg.other {
       align-self: flex-start;
-      background: #1e293b;
-      border-bottom-left-radius: 4px;
+      background: #1a2e45;
+      border-bottom-left-radius: 8px;
     }
     .msg.sticker-msg {
       background: none !important;
@@ -739,12 +806,12 @@
     .msg .author {
       font-size: .75rem;
       font-weight: 600;
-      color: #a5b4fc;
+      color: var(--accent);
       margin-bottom: 2px;
     }
     .msg .reply-quote {
-      border-left: 2px solid rgba(99, 102, 241, .8);
-      background: rgba(15, 23, 42, .28);
+      border-left: 2px solid rgba(56, 73, 89, .45);
+      background: rgba(10, 26, 42, .4);
       border-radius: 6px;
       padding: .35rem .45rem;
       margin-bottom: .35rem;
@@ -767,7 +834,7 @@
     .msg .reply-quote .reply-author {
       font-size: .68rem;
       font-weight: 600;
-      color: #a5b4fc;
+      color: var(--accent);
       margin-bottom: 2px;
     }
     .msg .reply-quote .reply-text {
@@ -779,7 +846,7 @@
       cursor: pointer;
     }
     .msg.self .author { color: rgba(255,255,255,.7); }
-    .msg.sticker-msg.self .author { color: #a5b4fc; }
+    .msg.sticker-msg.self .author { color: var(--accent); }
     .msg .time {
       font-size: .65rem;
       color: rgba(255,255,255,.45);
@@ -795,27 +862,27 @@
       opacity: 0;
     }
     .msg .seen-indicator.active { opacity: 1; }
-    .msg.other .time { color: #64748b; }
-    .msg.sticker-msg .time { color: #64748b; }
+    .msg.other .time { color: var(--text-muted); }
+    .msg.sticker-msg .time { color: var(--text-muted); }
 
     .msg .sticker-img {
       width: 120px;
       height: 120px;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       object-fit: cover;
     }
 
     .msg img:not(.sticker-img) {
       max-width: 100%;
       max-height: 300px;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       margin-top: 4px;
       cursor: pointer;
     }
     .msg video {
       max-width: 100%;
       max-height: 300px;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       margin-top: 4px;
     }
 
@@ -823,8 +890,8 @@
     .sticker-picker {
       display: none;
       padding: .75rem;
-      background: #1e293b;
-      border-top: 1px solid #334155;
+      background: var(--panel-soft);
+      border-top: 1px solid var(--panel-border);
       flex-shrink: 0;
       max-height: 180px;
       overflow-y: auto;
@@ -837,17 +904,18 @@
       margin-bottom: .6rem;
     }
     .sticker-picker .sticker-tab {
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #94a3b8;
-      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      color: var(--text-muted);
+      border-radius: var(--radius-md);
       padding: .2rem .55rem;
       font-size: .72rem;
       cursor: pointer;
     }
     .sticker-picker .sticker-tab.active {
-      border-color: #6366f1;
-      color: #e2e8f0;
+      border-color: var(--accent);
+      color: var(--text-strong);
+      background: var(--accent-soft);
     }
     .sticker-picker .sticker-picker-grid {
       display: flex;
@@ -860,21 +928,21 @@
       height: 56px;
     }
     .sticker-picker .sticker-picker-grid .empty {
-      color: #475569;
+      color: var(--text-muted);
       font-size: .85rem;
       padding: .25rem 0;
     }
     .sticker-picker .sticker-pick {
       width: 56px;
       height: 56px;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       object-fit: cover;
       cursor: pointer;
       border: 2px solid transparent;
       transition: border-color .15s, transform .15s;
     }
     .sticker-picker .sticker-pick:hover {
-      border-color: #6366f1;
+      border-color: var(--accent);
       transform: scale(1.1);
     }
     .sticker-picker .sticker-favorite {
@@ -884,9 +952,9 @@
       width: 18px;
       height: 18px;
       border-radius: 999px;
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #64748b;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      color: var(--text-muted);
       font-size: .65rem;
       cursor: pointer;
       display: flex;
@@ -904,31 +972,31 @@
       display: flex;
       padding: .6rem .75rem;
       gap: .4rem;
-      background: #1e293b;
-      border-top: 1px solid #334155;
+      background: var(--panel-soft);
+      border-top: 1px solid var(--panel-border);
       align-items: flex-end;
       flex-shrink: 0;
     }
     .chat-input input[type="text"] {
       flex: 1;
       padding: .7rem .75rem;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      background: #0f172a;
-      color: #f8fafc;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      background: var(--panel);
+      color: var(--text-strong);
       font-size: 1rem;
       outline: none;
       min-width: 0;
     }
-    .chat-input input[type="text"]:focus { border-color: #6366f1; }
+    .chat-input input[type="text"]:focus { border-color: var(--accent); }
     .chat-input input[type="file"] { display: none; }
 
     .chat-input .icon-btn {
       padding: .6rem;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      background: #0f172a;
-      color: #94a3b8;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      background: var(--panel);
+      color: var(--text-muted);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -937,28 +1005,28 @@
       height: 42px;
       flex-shrink: 0;
     }
-    .chat-input .icon-btn:hover { border-color: #6366f1; color: #f8fafc; }
-    .chat-input .icon-btn.active { border-color: #6366f1; color: #a5b4fc; }
+    .chat-input .icon-btn:hover { border-color: var(--accent); color: var(--text-strong); }
+    .chat-input .icon-btn.active { border-color: var(--accent); color: var(--accent); }
 
     .chat-input .send-btn {
       padding: .7rem 1rem;
       border: none;
-      border-radius: 8px;
-      background: #6366f1;
+      border-radius: var(--radius-md);
+      background: var(--accent);
       color: #fff;
       font-size: 1rem;
       cursor: pointer;
       font-weight: 600;
       flex-shrink: 0;
     }
-    .chat-input .send-btn:hover { background: #4f46e5; }
+    .chat-input .send-btn:hover { background: var(--accent-strong); }
 
     /* File preview bar */
     .file-preview {
       display: none;
       padding: .5rem 1rem;
-      background: #1e293b;
-      border-top: 1px solid #334155;
+      background: var(--panel-soft);
+      border-top: 1px solid var(--panel-border);
       align-items: center;
       gap: .75rem;
       flex-shrink: 0;
@@ -972,7 +1040,7 @@
     .file-preview .file-name {
       flex: 1;
       font-size: .85rem;
-      color: #94a3b8;
+      color: var(--text-muted);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -989,8 +1057,8 @@
     .reply-preview {
       display: none;
       padding: .5rem 1rem;
-      background: #1e293b;
-      border-top: 1px solid #334155;
+      background: var(--panel-soft);
+      border-top: 1px solid var(--panel-border);
       align-items: center;
       gap: .65rem;
       flex-shrink: 0;
@@ -1002,12 +1070,12 @@
     }
     .reply-preview .reply-label {
       font-size: .72rem;
-      color: #94a3b8;
+      color: var(--text-muted);
       margin-bottom: 2px;
     }
     .reply-preview .reply-snippet {
       font-size: .82rem;
-      color: #e2e8f0;
+      color: var(--text-strong);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1124,6 +1192,10 @@
         width: 66px;
         height: 88px;
       }
+      .video-panel.swapped-view #remote-video {
+        width: 66px;
+        height: 88px;
+      }
     }
   </style>
 </head>
@@ -1172,7 +1244,7 @@
       <div class="hint">Desktop: hold Cmd/Ctrl to select multiple images</div>
       <div class="sticker-search">
         <div class="sticker-search-row">
-          <input id="sticker-search-input" class="form-input" type="text" placeholder="Search online stickers (Tenor)">
+          <input id="sticker-search-input" class="form-input" type="text" placeholder="Search online stickers">
           <button class="btn-secondary" id="sticker-search-btn">Search</button>
         </div>
         <div class="hint" id="sticker-search-status"></div>
@@ -1216,6 +1288,8 @@
       <div class="video-actions">
         <button id="video-toggle-audio-btn">Unmute</button>
         <button id="video-toggle-camera-btn">Camera Off</button>
+        <button id="video-switch-camera-btn" style="display:none">Switch Cam</button>
+        <button id="video-swap-view-btn">Self Main</button>
         <button class="danger" id="video-hangup-btn">Hang Up</button>
       </div>
     </div>
@@ -1266,8 +1340,8 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const TAB_STORAGE_KEY = "notechat_tab_token";
-    const LAST_LOGIN_AT_KEY = "notechat_last_login_at";
-    const LOGIN_HISTORY_KEY = "notechat_login_history";
+    const LOGIN_DEVICES_LIMIT = 12;
+    const CORS_PROXY_BASE = "https://api.allorigins.win/raw?url=";
     const tabToken = sessionStorage.getItem(TAB_STORAGE_KEY);
 
     if (!tabToken) {
@@ -1340,6 +1414,8 @@
     const localVideo = document.getElementById("local-video");
     const videoToggleAudioBtn = document.getElementById("video-toggle-audio-btn");
     const videoToggleCameraBtn = document.getElementById("video-toggle-camera-btn");
+    const videoSwitchCameraBtn = document.getElementById("video-switch-camera-btn");
+    const videoSwapViewBtn = document.getElementById("video-swap-view-btn");
     const videoHangupBtn = document.getElementById("video-hangup-btn");
 
     let myName = "";
@@ -1377,6 +1453,12 @@
     let localMediaAvailable = false;
     let micEnabled = false;
     let cameraEnabled = true;
+    let preferredFacingMode = "user";
+    let canSwitchCamera = false;
+    let switchingCamera = false;
+    let knownVideoInputDeviceIds = [];
+    let activeVideoDeviceId = "";
+    let selfViewPrimary = false;
     const STICKER_FAVORITES_KEY = "notechat_sticker_favorites";
     const STICKER_RECENTS_KEY = "notechat_sticker_recents";
     let favoriteStickerIds = new Set(JSON.parse(localStorage.getItem(STICKER_FAVORITES_KEY) || "[]"));
@@ -1403,52 +1485,26 @@
       return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
 
-    function readLoginHistory() {
+    async function fetchLoginDevices() {
       try {
-        const parsed = JSON.parse(localStorage.getItem(LOGIN_HISTORY_KEY) || "[]");
-        if (!Array.isArray(parsed)) return [];
-        return parsed
+        const response = await fetch(withTab(`/login-devices?limit=${LOGIN_DEVICES_LIMIT}`), {
+          headers: authHeaders,
+        });
+        if (!response.ok) return [];
+        const payload = await response.json();
+        const devices = Array.isArray(payload?.devices) ? payload.devices : [];
+        return devices
           .map((item) => ({
-            key: `${item?.key || ""}`.trim(),
-            name: `${item?.name || ""}`.trim().slice(0, 30),
+            deviceId: `${item?.deviceId || ""}`.trim(),
+            deviceName: `${item?.deviceName || ""}`.trim().slice(0, 64),
             lastLoginAt: Number(item?.lastLoginAt) || 0,
           }))
-          .filter((item) => item.key && Number.isFinite(item.lastLoginAt) && item.lastLoginAt > 0)
+          .filter((item) => item.deviceId && Number.isFinite(item.lastLoginAt) && item.lastLoginAt > 0)
           .sort((a, b) => b.lastLoginAt - a.lastLoginAt)
-          .slice(0, 12);
+          .slice(0, LOGIN_DEVICES_LIMIT);
       } catch (_error) {
         return [];
       }
-    }
-
-    function saveLoginHistory(history) {
-      try {
-        localStorage.setItem(LOGIN_HISTORY_KEY, JSON.stringify(history));
-      } catch (_error) {}
-    }
-
-    function upsertLoginHistory(name) {
-      if (!tabToken) return;
-      const safeName = `${name || ""}`.trim().slice(0, 30);
-      const history = readLoginHistory();
-      const existingIdx = history.findIndex((item) => item.key === tabToken);
-      const rawTs = Number(localStorage.getItem(LAST_LOGIN_AT_KEY));
-      const loginAt = Number.isFinite(rawTs) && rawTs > 0 ? rawTs : Date.now();
-
-      if (existingIdx >= 0) {
-        if (safeName) {
-          history[existingIdx].name = safeName;
-        }
-        history[existingIdx].lastLoginAt = loginAt;
-      } else {
-        history.push({
-          key: tabToken,
-          name: safeName,
-          lastLoginAt: loginAt,
-        });
-      }
-      history.sort((a, b) => b.lastLoginAt - a.lastLoginAt);
-      saveLoginHistory(history.slice(0, 30));
     }
 
     function formatJoinDate(ts) {
@@ -1460,10 +1516,10 @@
       });
     }
 
-    function renderLoginHistory() {
+    function renderLoginHistory(history) {
       if (!loginHistoryEl) return;
-      const history = readLoginHistory();
-      if (!history.length) {
+      const listData = Array.isArray(history) ? history : [];
+      if (!listData.length) {
         loginHistoryEl.innerHTML = "";
         loginHistoryEl.style.display = "none";
         return;
@@ -1471,19 +1527,20 @@
 
       const title = document.createElement("div");
       title.className = "login-history-title";
-      title.textContent = "Recent Logins On This Device";
+      title.textContent = "Latest Logins Across Devices";
 
       const list = document.createElement("ul");
       list.className = "login-history-list";
 
-      history.forEach((entry) => {
+      listData.forEach((entry) => {
         const item = document.createElement("li");
         item.className = "login-history-item";
 
         const nameEl = document.createElement("span");
         nameEl.className = "login-history-name";
-        const fallbackId = entry.key.slice(0, 6);
-        nameEl.textContent = entry.name || `Guest ${fallbackId}`;
+        const shortId = entry.deviceId.slice(0, 6);
+        const baseName = entry.deviceName || "Device";
+        nameEl.textContent = `${baseName} · ${shortId}`;
 
         const timeEl = document.createElement("span");
         timeEl.className = "login-history-time";
@@ -1498,6 +1555,11 @@
       loginHistoryEl.appendChild(title);
       loginHistoryEl.appendChild(list);
       loginHistoryEl.style.display = "block";
+    }
+
+    async function refreshLoginHistory() {
+      const history = await fetchLoginDevices();
+      renderLoginHistory(history);
     }
 
     function escapeHtml(str) {
@@ -1573,6 +1635,95 @@
         if (!Array.isArray(data?.iceServers) || !data.iceServers.length) return;
         rtcConfig = { iceServers: data.iceServers };
       } catch (_error) {}
+    }
+
+    function isPhoneLikeDevice() {
+      const ua = navigator.userAgent || "";
+      const looksMobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+      const touchMac = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+      const smallTouchViewport = window.matchMedia("(max-width: 900px)").matches && navigator.maxTouchPoints > 1;
+      return looksMobileUa || touchMac || smallTouchViewport;
+    }
+
+    function syncChatViewportLayout() {
+      if (!chatScreen) return;
+      const needsKeyboardSafePinning = isPhoneLikeDevice();
+      if (!needsKeyboardSafePinning || !window.visualViewport) {
+        chatScreen.style.top = "0px";
+        chatScreen.style.left = "0px";
+        chatScreen.style.width = "100%";
+        chatScreen.style.height = "100dvh";
+        return;
+      }
+      const vv = window.visualViewport;
+      const top = Math.max(0, vv.offsetTop || 0);
+      const left = Math.max(0, vv.offsetLeft || 0);
+      const width = Math.max(0, vv.width || window.innerWidth);
+      const height = Math.max(0, vv.height || window.innerHeight);
+      chatScreen.style.top = `${top}px`;
+      chatScreen.style.left = `${left}px`;
+      chatScreen.style.width = `${width}px`;
+      chatScreen.style.height = `${height}px`;
+    }
+
+    async function refreshVideoInputDevices() {
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        knownVideoInputDeviceIds = [];
+        canSwitchCamera = false;
+        return;
+      }
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        knownVideoInputDeviceIds = devices
+          .filter((device) => device.kind === "videoinput" && device.deviceId)
+          .map((device) => device.deviceId);
+      } catch (_error) {
+        knownVideoInputDeviceIds = [];
+      }
+      canSwitchCamera = knownVideoInputDeviceIds.length > 1;
+    }
+
+    async function getLocalMediaStream() {
+      const tryList = [
+        { video: { facingMode: { ideal: preferredFacingMode } }, audio: true },
+        { video: true, audio: true },
+      ];
+      let lastError = null;
+      for (const constraints of tryList) {
+        try {
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error("Unable to acquire camera");
+    }
+
+    async function getSwitchedCameraVideoTrack(targetFacingMode) {
+      const currentIndex = activeVideoDeviceId ? knownVideoInputDeviceIds.indexOf(activeVideoDeviceId) : -1;
+      const nextIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+      const candidateDeviceId = knownVideoInputDeviceIds.length > 1
+        ? knownVideoInputDeviceIds[(nextIndex + knownVideoInputDeviceIds.length) % knownVideoInputDeviceIds.length]
+        : "";
+
+      const tryList = [];
+      if (candidateDeviceId && candidateDeviceId !== activeVideoDeviceId) {
+        tryList.push({ video: { deviceId: { exact: candidateDeviceId } }, audio: false });
+      }
+      tryList.push({ video: { facingMode: { ideal: targetFacingMode } }, audio: false });
+      tryList.push({ video: true, audio: false });
+
+      let lastError = null;
+      for (const constraints of tryList) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          const track = stream.getVideoTracks()[0] || null;
+          if (track) return track;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error("Unable to switch camera");
     }
 
     function isRtcTargeted(targetUserId) {
@@ -1660,6 +1811,22 @@
       videoToggleCameraBtn.classList.toggle("active", !cameraEnabled);
       videoToggleAudioBtn.disabled = !localMediaAvailable;
       videoToggleCameraBtn.disabled = !localMediaAvailable;
+      if (videoSwitchCameraBtn) {
+        const phoneDevice = isPhoneLikeDevice();
+        const hasLocalVideoTrack = !!(localStream && localStream.getVideoTracks().some((track) => track.readyState === "live"));
+        videoSwitchCameraBtn.style.display = phoneDevice ? "inline-flex" : "none";
+        videoSwitchCameraBtn.disabled = !phoneDevice || !localMediaAvailable || !hasLocalVideoTrack || !canSwitchCamera || switchingCamera;
+        videoSwitchCameraBtn.textContent = switchingCamera ? "Switching..." : "Switch Cam";
+      }
+      if (videoSwapViewBtn) {
+        videoSwapViewBtn.disabled = !callActive;
+        videoSwapViewBtn.textContent = selfViewPrimary ? "Peer Main" : "Self Main";
+      }
+    }
+
+    function updateVideoLayoutMode() {
+      if (!videoPanel) return;
+      videoPanel.classList.toggle("swapped-view", selfViewPrimary);
     }
 
     async function ensureLocalStream({ allowNoMedia = false } = {}) {
@@ -1671,12 +1838,14 @@
         return localStream;
       }
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localStream = await getLocalMediaStream();
         localMediaAvailable = true;
         micEnabled = false;
         cameraEnabled = true;
         localStream.getAudioTracks().forEach((track) => { track.enabled = micEnabled; });
         localStream.getVideoTracks().forEach((track) => { track.enabled = cameraEnabled; });
+        activeVideoDeviceId = localStream.getVideoTracks()[0]?.getSettings?.().deviceId || "";
+        await refreshVideoInputDevices();
         localVideo.srcObject = localStream;
         if (peerConnection) {
           const existingKinds = new Set(
@@ -1835,6 +2004,7 @@
       }
       localStream = null;
       localVideo.srcObject = null;
+      activeVideoDeviceId = "";
       localMediaAvailable = false;
     }
 
@@ -1850,9 +2020,52 @@
       localMediaAvailable = false;
       micEnabled = false;
       cameraEnabled = true;
+      switchingCamera = false;
+      selfViewPrimary = false;
       videoPanel.classList.remove("active");
+      updateVideoLayoutMode();
       setVideoStatus(reason || "Video is off");
       updateVideoButtons();
+    }
+
+    async function switchCamera() {
+      if (!localMediaAvailable || !localStream || switchingCamera || !isPhoneLikeDevice()) return;
+      const hasLocalVideoTrack = localStream.getVideoTracks().some((track) => track.readyState === "live");
+      if (!hasLocalVideoTrack) return;
+
+      switchingCamera = true;
+      const targetFacingMode = preferredFacingMode === "user" ? "environment" : "user";
+      updateVideoButtons();
+      try {
+        const nextVideoTrack = await getSwitchedCameraVideoTrack(targetFacingMode);
+        nextVideoTrack.enabled = cameraEnabled;
+
+        const oldVideoTracks = localStream.getVideoTracks();
+        oldVideoTracks.forEach((track) => {
+          localStream.removeTrack(track);
+          track.stop();
+        });
+        localStream.addTrack(nextVideoTrack);
+        localVideo.srcObject = localStream;
+
+        if (peerConnection) {
+          const sender = peerConnection.getSenders().find((s) => s.track && s.track.kind === "video");
+          if (sender) {
+            await sender.replaceTrack(nextVideoTrack);
+          } else {
+            peerConnection.addTrack(nextVideoTrack, localStream);
+          }
+        }
+
+        activeVideoDeviceId = nextVideoTrack.getSettings?.().deviceId || "";
+        preferredFacingMode = targetFacingMode;
+        await refreshVideoInputDevices();
+      } catch (_error) {
+        setVideoStatus("Unable to switch camera");
+      } finally {
+        switchingCamera = false;
+        updateVideoButtons();
+      }
     }
 
     async function startOutgoingVideoCall() {
@@ -2208,8 +2421,6 @@
       const name = nameInput.value.trim().slice(0, 30);
       const room = roomInput.value.trim();
       if (!name || !room) return;
-      upsertLoginHistory(name);
-      renderLoginHistory();
       if (callActive) {
         endVideoCall({ notifyPeer: true, reason: "Video is off" });
       }
@@ -2220,6 +2431,7 @@
       joinScreen.style.display = "none";
       stickersScreen.style.display = "none";
       chatScreen.style.display = "flex";
+      syncChatViewportLayout();
       messagesEl.innerHTML = "";
       messagesById.clear();
       clearPendingReply();
@@ -2237,14 +2449,14 @@
     roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
     nameInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
-        upsertLoginHistory(nameInput.value);
-        renderLoginHistory();
         roomInput.focus();
       }
     });
-    nameInput.addEventListener("blur", () => {
-      upsertLoginHistory(nameInput.value);
-      renderLoginHistory();
+    msgInput.addEventListener("focus", () => {
+      setTimeout(syncChatViewportLayout, 60);
+    });
+    msgInput.addEventListener("blur", () => {
+      setTimeout(syncChatViewportLayout, 60);
     });
     openStickersBtn.addEventListener("click", () => {
       stickersScreen.style.display = "flex";
@@ -2272,6 +2484,14 @@
       if (!localMediaAvailable || !localStream) return;
       cameraEnabled = !cameraEnabled;
       localStream.getVideoTracks().forEach((track) => { track.enabled = cameraEnabled; });
+      updateVideoButtons();
+    });
+    videoSwitchCameraBtn.addEventListener("click", () => {
+      switchCamera();
+    });
+    videoSwapViewBtn.addEventListener("click", () => {
+      selfViewPrimary = !selfViewPrimary;
+      updateVideoLayoutMode();
       updateVideoButtons();
     });
     clearReplyBtn.addEventListener("click", clearPendingReply);
@@ -2582,19 +2802,90 @@
       stickerSearchStatus.classList.toggle("error", !!isError);
     }
 
-    async function importOnlineSticker(url) {
-      const res = await fetch("/import-sticker-url", {
+    function handleAccessDenied() {
+      setStickerSearchStatus("Session expired. Please login again.", true);
+      sessionStorage.removeItem(TAB_STORAGE_KEY);
+      window.setTimeout(() => {
+        window.location.replace("/access");
+      }, 120);
+    }
+
+    async function fetchWithCorsProxy(url, init = {}) {
+      try {
+        const direct = await fetch(url, init);
+        if (direct.ok) return direct;
+      } catch (_err) {}
+      return fetch(`${CORS_PROXY_BASE}${encodeURIComponent(url)}`, init);
+    }
+
+    function inferImageMimeFromUrl(url) {
+      const lower = `${url || ""}`.toLowerCase();
+      if (/\.gif(?:$|[?#])/.test(lower)) return "image/gif";
+      if (/\.png(?:$|[?#])/.test(lower)) return "image/png";
+      if (/\.jpe?g(?:$|[?#])/.test(lower)) return "image/jpeg";
+      if (/\.webp(?:$|[?#])/.test(lower)) return "image/webp";
+      return "";
+    }
+
+    async function uploadStickerFromUrlClient(url) {
+      const response = await fetchWithCorsProxy(url, { mode: "cors" });
+      if (!response.ok) {
+        throw new Error("Cannot download sticker");
+      }
+      const rawBlob = await response.blob();
+      let mime = `${rawBlob.type || ""}`.toLowerCase();
+      if (!mime.startsWith("image/")) {
+        mime = inferImageMimeFromUrl(url);
+      }
+      if (!mime.startsWith("image/")) {
+        throw new Error("Selected URL is not an image");
+      }
+      if (mime !== "image/gif") {
+        throw new Error("Only GIF stickers are supported");
+      }
+      const blob = rawBlob.type === mime ? rawBlob : new Blob([rawBlob], { type: mime });
+      const formData = new FormData();
+      formData.append("sticker", blob, "imported-sticker.gif");
+      const uploadRes = await fetch("/upload-sticker", {
         method: "POST",
-        headers: { ...authHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: formData,
+        headers: authHeaders,
       });
-      if (!res.ok) {
+      if (!uploadRes.ok) {
+        if (uploadRes.status === 403) {
+          handleAccessDenied();
+          throw new Error("Access denied");
+        }
+        let errorText = "Upload failed";
+        try {
+          const data = await uploadRes.json();
+          errorText = `${data?.error || data?.message || errorText}`;
+        } catch (_err) {}
+        throw new Error(errorText);
+      }
+    }
+
+    async function importOnlineSticker(url) {
+      try {
+        const res = await fetch("/import-sticker-url", {
+          method: "POST",
+          headers: { ...authHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        if (res.status === 403) {
+          handleAccessDenied();
+          throw new Error("Access denied");
+        }
+        if (res.ok) return;
         let errorText = "Import failed";
         try {
           const data = await res.json();
           errorText = data.error || errorText;
         } catch (_err) {}
         throw new Error(errorText);
+      } catch (_err) {
+        // Fallback when server cannot reach external URLs.
+        await uploadStickerFromUrlClient(url);
       }
     }
 
@@ -2652,6 +2943,10 @@
         const res = await fetch(withTab(`/search-stickers?q=${encodeURIComponent(q)}&limit=18`), {
           headers: authHeaders,
         });
+        if (res.status === 403) {
+          handleAccessDenied();
+          return;
+        }
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw new Error(data.error || "Search failed");
@@ -2661,7 +2956,8 @@
         if (!onlineStickerResults.length) {
           setStickerSearchStatus("No result");
         } else {
-          setStickerSearchStatus(`Found ${onlineStickerResults.length} result(s)`);
+          const provider = `${data.provider || "search"}`.trim();
+          setStickerSearchStatus(`Found ${onlineStickerResults.length} result(s) via ${provider}`);
         }
       } catch (err) {
         onlineStickerResults = [];
@@ -2685,6 +2981,10 @@
         const formData = new FormData();
         formData.append("sticker", file, file.name);
         const res = await fetch("/upload-sticker", { method: "POST", body: formData, headers: authHeaders });
+        if (res.status === 403) {
+          handleAccessDenied();
+          throw new Error("Access denied");
+        }
         if (!res.ok) throw new Error("Upload failed");
         return;
       }
@@ -2712,6 +3012,10 @@
       const formData = new FormData();
       formData.append("sticker", blob, "sticker.png");
       const res = await fetch("/upload-sticker", { method: "POST", body: formData, headers: authHeaders });
+      if (res.status === 403) {
+        handleAccessDenied();
+        throw new Error("Access denied");
+      }
       if (!res.ok) throw new Error("Upload failed");
     }
 
@@ -2821,9 +3125,28 @@
     });
 
     loadRtcConfig();
-    renderLoginHistory();
+    refreshVideoInputDevices().finally(updateVideoButtons);
+    refreshLoginHistory();
+    window.setInterval(() => {
+      if (joinScreen.style.display !== "none") {
+        refreshLoginHistory();
+      }
+    }, 30000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        refreshLoginHistory();
+      }
+    });
     setVideoStatus("Video is off");
+    updateVideoLayoutMode();
     updateVideoButtons();
+    syncChatViewportLayout();
+    window.addEventListener("resize", syncChatViewportLayout);
+    window.addEventListener("orientationchange", syncChatViewportLayout);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", syncChatViewportLayout);
+      window.visualViewport.addEventListener("scroll", syncChatViewportLayout);
+    }
 
     // Toggle sticker picker in chat
     stickerBtn.addEventListener("click", () => {

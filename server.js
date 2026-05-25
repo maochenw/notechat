@@ -22,6 +22,58 @@ const ACCESS_PAGE = path.join(PUBLIC_DIR, "access.html");
 const APP_PAGE = path.join(PUBLIC_DIR, "index.html");
 
 const tabSessions = new Map();
+const deviceLogins = new Map();
+const MAX_DEVICE_LOGINS = 200;
+
+function sanitizeDeviceId(raw) {
+  const value = `${raw || ""}`.trim();
+  if (!value) return "";
+  return value.replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 128);
+}
+
+function sanitizeDeviceName(raw) {
+  return `${raw || ""}`.trim().replace(/\s+/g, " ").slice(0, 64);
+}
+
+function trimUserAgent(raw) {
+  return `${raw || ""}`.trim().replace(/\s+/g, " ").slice(0, 64);
+}
+
+function fallbackDeviceName(req, deviceId) {
+  const ua = trimUserAgent(req.headers["user-agent"]);
+  if (ua) return ua;
+  if (!deviceId) return "Unknown device";
+  return `Device ${deviceId.slice(0, 8)}`;
+}
+
+function recordDeviceLogin(req, rawDeviceId, rawDeviceName) {
+  const deviceId = sanitizeDeviceId(rawDeviceId);
+  if (!deviceId) return null;
+
+  const deviceName = sanitizeDeviceName(rawDeviceName) || fallbackDeviceName(req, deviceId);
+  const loginEntry = {
+    deviceId,
+    deviceName,
+    lastLoginAt: Date.now(),
+  };
+  deviceLogins.set(deviceId, loginEntry);
+
+  if (deviceLogins.size > MAX_DEVICE_LOGINS) {
+    const oldest = Array.from(deviceLogins.values())
+      .sort((a, b) => a.lastLoginAt - b.lastLoginAt)
+      .slice(0, deviceLogins.size - MAX_DEVICE_LOGINS);
+    oldest.forEach((entry) => deviceLogins.delete(entry.deviceId));
+  }
+
+  return loginEntry;
+}
+
+function getRecentDeviceLogins(limit = 12) {
+  const boundedLimit = Math.min(30, Math.max(1, Number(limit) || 12));
+  return Array.from(deviceLogins.values())
+    .sort((a, b) => b.lastLoginAt - a.lastLoginAt)
+    .slice(0, boundedLimit);
+}
 
 function buildRtcIceServers() {
   const iceServers = [
@@ -110,9 +162,13 @@ const stickerStorage = multer.diskStorage({
 
 const stickerUpload = multer({
   storage: stickerStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // Allow larger GIF uploads
+  limits: { fileSize: 25 * 1024 * 1024 }, // Allow larger GIF uploads
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
+    const ext = path.extname(`${file.originalname || ""}`).toLowerCase();
+    const looksLikeImageByExt = [".gif", ".png", ".jpg", ".jpeg", ".webp"].includes(ext);
+    const isImageMime = `${file.mimetype || ""}`.startsWith("image/");
+    const isGenericBinary = `${file.mimetype || ""}` === "application/octet-stream";
+    if (isImageMime || (isGenericBinary && looksLikeImageByExt)) {
       cb(null, true);
     } else {
       cb(new Error("Only image files are allowed"));
@@ -144,8 +200,16 @@ app.post("/access-token", (req, res) => {
     return res.status(401).json({ error: "Invalid access code" });
   }
 
+  const deviceEntry = recordDeviceLogin(
+    req,
+    req.headers["x-device-id"] || req.body.deviceId,
+    req.headers["x-device-name"] || req.body.deviceName,
+  );
   const tabToken = createTabSession();
-  return res.json({ tabToken });
+  return res.json({
+    tabToken,
+    loginAt: deviceEntry?.lastLoginAt || Date.now(),
+  });
 });
 
 app.post("/logout", (req, res) => {
@@ -166,6 +230,12 @@ app.get("/index-archived", (_req, res) => {
 
 app.get("/rtc-config", requireAccess, (_req, res) => {
   return res.json({ iceServers: buildRtcIceServers() });
+});
+
+app.get("/login-devices", requireAccess, (req, res) => {
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isFinite(rawLimit) ? rawLimit : 12;
+  return res.json({ devices: getRecentDeviceLogins(limit) });
 });
 
 // Landing image used by public/index.html
@@ -210,6 +280,10 @@ function contentTypeToExtension(contentType) {
   if (base === "image/gif") return ".gif";
   if (base === "image/webp") return ".webp";
   return "";
+}
+
+function isGifUrl(url) {
+  return /\.gif(?:$|[?#])/i.test(`${url || ""}`);
 }
 
 function isPrivateIpAddress(ip) {
@@ -324,6 +398,45 @@ function rebuildStickerList() {
 
 let stickers = rebuildStickerList();
 
+async function searchCommonsStickers(q, limit) {
+  const params = new URLSearchParams({
+    action: "query",
+    format: "json",
+    generator: "search",
+    gsrsearch: `${q} filemime:gif`,
+    gsrnamespace: "6",
+    gsrlimit: String(limit),
+    prop: "imageinfo",
+    iiprop: "url|mime",
+    iiurlwidth: "240",
+  });
+
+  const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error("Commons search failed");
+  }
+  const data = await response.json();
+  const pages = Object.values(data?.query?.pages || {});
+  const normalized = pages
+    .map((page) => {
+      const info = Array.isArray(page?.imageinfo) ? page.imageinfo[0] : null;
+      const sourceUrl = `${info?.url || ""}`.trim();
+      const previewUrl = `${info?.thumburl || sourceUrl}`.trim();
+      const mime = `${info?.mime || ""}`.toLowerCase();
+      return {
+        id: `commons-${page?.pageid || crypto.randomUUID()}`,
+        title: `${page?.title || ""}`.replace(/^File:/i, "").trim(),
+        url: sourceUrl,
+        previewUrl,
+        mime,
+      };
+    })
+    .filter((item) => item.url && item.mime === "image/gif" && isGifUrl(item.url))
+    .map(({ mime, ...rest }) => rest)
+    .slice(0, limit);
+  return normalized;
+}
+
 app.get("/search-stickers", requireAccess, async (req, res) => {
   const q = `${req.query.q || ""}`.trim();
   const rawLimit = Number(req.query.limit);
@@ -333,43 +446,87 @@ app.get("/search-stickers", requireAccess, async (req, res) => {
     return res.status(400).json({ error: "Missing query" });
   }
 
-  const apiKey = `${process.env.TENOR_API_KEY || ""}`.trim();
-  if (!apiKey) {
-    return res.status(503).json({ error: "TENOR_API_KEY is not configured" });
+  const tenorApiKey = `${process.env.TENOR_API_KEY || ""}`.trim();
+  if (tenorApiKey) {
+    const params = new URLSearchParams({
+      key: tenorApiKey,
+      q,
+      limit: String(limit),
+      media_filter: "gif,tinygif,mediumgif",
+      contentfilter: "off",
+      locale: "zh_CN",
+    });
+
+    try {
+      const response = await fetch(`https://tenor.googleapis.com/v2/search?${params.toString()}`);
+      if (!response.ok) {
+        return res.status(502).json({ error: "Failed to fetch Tenor results" });
+      }
+      const data = await response.json();
+      const results = Array.isArray(data?.results) ? data.results : [];
+
+      const normalized = results.map((item) => {
+        const media = item?.media_formats || {};
+        const best = media.mediumgif || media.gif || media.tinygif || null;
+        const preview = media.tinygif || media.nanogif || media.gif || best;
+        return {
+          id: `${item?.id || crypto.randomUUID()}`,
+          title: `${item?.content_description || ""}`.trim(),
+          url: `${best?.url || ""}`,
+          previewUrl: `${preview?.url || best?.url || ""}`,
+        };
+      }).filter((item) => item.url && isGifUrl(item.url));
+
+      if (normalized.length) {
+        return res.json({ results: normalized, provider: "tenor" });
+      }
+    } catch (_error) {
+      // fall through to next provider
+    }
   }
 
-  const params = new URLSearchParams({
-    key: apiKey,
-    q,
-    limit: String(limit),
-    media_filter: "gif,tinygif,mediumgif",
-    contentfilter: "off",
-    locale: "zh_CN",
-  });
+  const giphyKey = `${process.env.GIPHY_API_KEY || ""}`.trim();
+  if (giphyKey) {
+    const giphyParams = new URLSearchParams({
+      api_key: giphyKey,
+      q,
+      limit: String(limit),
+      rating: "pg-13",
+      lang: "zh-CN",
+    });
+
+    try {
+      const response = await fetch(`https://api.giphy.com/v1/stickers/search?${giphyParams.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        const results = Array.isArray(data?.data) ? data.data : [];
+        const normalized = results.map((item) => {
+          const images = item?.images || {};
+          const best = images.fixed_height || images.original || images.downsized || null;
+          const preview = images.fixed_width_small || images.preview_gif || images.downsized_small || best;
+          return {
+            id: `${item?.id || crypto.randomUUID()}`,
+            title: `${item?.title || ""}`.trim(),
+            url: `${best?.url || ""}`,
+            previewUrl: `${preview?.url || best?.url || ""}`,
+          };
+        }).filter((item) => item.url && isGifUrl(item.url));
+        if (normalized.length) {
+          return res.json({ results: normalized, provider: "giphy" });
+        }
+      }
+    } catch (_error) {
+      // fall through to next provider
+    }
+  }
 
   try {
-    const response = await fetch(`https://tenor.googleapis.com/v2/search?${params.toString()}`);
-    if (!response.ok) {
-      return res.status(502).json({ error: "Failed to fetch Tenor results" });
-    }
-    const data = await response.json();
-    const results = Array.isArray(data?.results) ? data.results : [];
-
-    const normalized = results.map((item) => {
-      const media = item?.media_formats || {};
-      const best = media.mediumgif || media.gif || media.tinygif || null;
-      const preview = media.tinygif || media.nanogif || media.gif || best;
-      return {
-        id: `${item?.id || crypto.randomUUID()}`,
-        title: `${item?.content_description || ""}`.trim(),
-        url: `${best?.url || ""}`,
-        previewUrl: `${preview?.url || best?.url || ""}`,
-      };
-    }).filter((item) => item.url);
-
-    return res.json({ results: normalized });
+    const commonsResults = await searchCommonsStickers(q, limit);
+    return res.json({ results: commonsResults, provider: "wikimedia-commons" });
   } catch (_error) {
-    return res.status(502).json({ error: "Sticker search failed" });
+    return res.status(502).json({
+      error: "Sticker search unavailable. Configure TENOR_API_KEY or GIPHY_API_KEY to restore full search.",
+    });
   }
 });
 
@@ -410,10 +567,10 @@ app.post("/import-sticker-url", requireAccess, async (req, res) => {
       return res.status(400).json({ error: "URL does not point to an image" });
     }
 
-    const maxBytes = 10 * 1024 * 1024;
+    const maxBytes = 25 * 1024 * 1024;
     const declaredLength = Number(response.headers.get("content-length"));
     if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-      return res.status(400).json({ error: "Image is too large (max 10MB)" });
+      return res.status(400).json({ error: "Image is too large (max 25MB)" });
     }
 
     let buffer = null;
@@ -426,7 +583,7 @@ app.post("/import-sticker-url", requireAccess, async (req, res) => {
         if (done) break;
         total += value.byteLength;
         if (total > maxBytes) {
-          return res.status(400).json({ error: "Image is too large (max 10MB)" });
+          return res.status(400).json({ error: "Image is too large (max 25MB)" });
         }
         chunks.push(Buffer.from(value));
       }
@@ -435,7 +592,7 @@ app.post("/import-sticker-url", requireAccess, async (req, res) => {
       const ab = await response.arrayBuffer();
       buffer = Buffer.from(ab);
       if (buffer.length > maxBytes) {
-        return res.status(400).json({ error: "Image is too large (max 10MB)" });
+        return res.status(400).json({ error: "Image is too large (max 25MB)" });
       }
     }
 
@@ -458,17 +615,26 @@ app.post("/import-sticker-url", requireAccess, async (req, res) => {
   }
 });
 
-app.post("/upload-sticker", requireAccess, stickerUpload.single("sticker"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
-  const sticker = {
-    id: path.basename(req.file.filename, path.extname(req.file.filename)),
-    url: `/uploaded-stickers/${req.file.filename}`,
-  };
-  stickers.push(sticker);
-  io.emit("stickers", stickers);
-  res.json(sticker);
+app.post("/upload-sticker", requireAccess, (req, res) => {
+  stickerUpload.single("sticker")(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ error: "Sticker file is too large (max 25MB)" });
+      }
+      return res.status(400).json({ error: err.message || "Sticker upload failed" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const sticker = {
+      id: path.basename(req.file.filename, path.extname(req.file.filename)),
+      url: `/uploaded-stickers/${req.file.filename}`,
+    };
+    stickers.push(sticker);
+    io.emit("stickers", stickers);
+    return res.json(sticker);
+  });
 });
 
 // Track rooms and their message history
