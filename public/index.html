@@ -66,30 +66,83 @@
       margin-bottom: 1.5rem;
       font-size: .95rem;
     }
-    #join-screen .login-history {
-      margin-top: -1rem;
-      margin-bottom: 1rem;
-      text-align: left;
+    .login-history-panel {
+      display: none;
+      flex-direction: column;
+      position: fixed;
+      inset: 0;
+      background: var(--bg-base);
+      z-index: 45;
+    }
+    .login-history-panel.active {
+      display: flex;
+    }
+    .login-history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .6rem;
+      padding: .75rem 1rem;
+      border-bottom: 1px solid var(--panel-border);
+      background: var(--panel);
+      flex-shrink: 0;
+    }
+    .login-history-header .title {
+      font-weight: 700;
+      color: var(--text-strong);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .login-history-header #close-login-history-btn {
       border: 1px solid var(--panel-border);
       border-radius: 10px;
       background: var(--panel-soft);
-      padding: .6rem .7rem;
-      display: none;
+      color: var(--text-strong);
+      font-size: .85rem;
+      font-weight: 600;
+      min-height: 36px;
+      padding: .6rem .95rem;
+      cursor: pointer;
+      line-height: 1;
+      transition: border-color .2s, color .2s, background .2s;
     }
-    #join-screen .login-history-title {
+    .login-history-header #close-login-history-btn:hover {
+      border-color: var(--accent);
+      color: #fff;
+      background: var(--accent);
+    }
+    .login-history-body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 1rem;
+    }
+    .login-history {
+      width: 100%;
+      max-width: 560px;
+      margin: 0 auto;
+      text-align: left;
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: var(--panel);
+      padding: .75rem .85rem;
+    }
+    .login-history-title {
       color: var(--text-muted);
       font-size: .72rem;
       letter-spacing: .02em;
       margin-bottom: .35rem;
       text-transform: uppercase;
     }
-    #join-screen .login-history-list {
+    .login-history-list {
       list-style: none;
       display: flex;
       flex-direction: column;
       gap: .25rem;
     }
-    #join-screen .login-history-item {
+    .login-history-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -98,16 +151,22 @@
       color: var(--text-muted);
       min-width: 0;
     }
-    #join-screen .login-history-name {
+    .login-history-name {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       font-weight: 600;
       color: var(--text-strong);
     }
-    #join-screen .login-history-time {
+    .login-history-time {
       color: var(--text-muted);
       flex-shrink: 0;
+    }
+    .login-history-empty {
+      font-size: .84rem;
+      color: var(--text-muted);
+      padding: .5rem 0 .25rem;
+      text-align: center;
     }
     .form-input {
       width: 100%;
@@ -1213,7 +1272,7 @@
     <div class="join-inner">
       <h1>NoteChat</h1>
       <p class="subtitle">Enter a room number to join or create a chat room.</p>
-      <div class="login-history" id="login-history"></div>
+      <button class="btn-secondary" id="open-login-history-btn" style="width:100%; margin-bottom:.75rem;">Latest Device Logins</button>
       <input id="name-input" class="form-input" type="text" placeholder="Your name" maxlength="30" autofocus>
       <input id="room-input" class="form-input" type="text" placeholder="Room number" maxlength="20">
       <button class="btn-primary" id="join-btn">Join Room</button>
@@ -1236,6 +1295,17 @@
         <button class="btn-secondary" id="open-stickers-btn" style="width:100%">Open Sticker Library</button>
         <div class="hint">Manage stickers on a dedicated page</div>
       </div>
+    </div>
+  </div>
+
+  <div class="login-history-panel" id="login-history-screen">
+    <div class="login-history-header">
+      <button id="close-login-history-btn">Back</button>
+      <span class="title">Latest Device Logins</span>
+      <span style="width:74px"></span>
+    </div>
+    <div class="login-history-body">
+      <div class="login-history" id="login-history"></div>
     </div>
   </div>
 
@@ -1368,7 +1438,10 @@
     });
 
     const joinScreen   = document.getElementById("join-screen");
+    const loginHistoryScreen = document.getElementById("login-history-screen");
     const loginHistoryEl = document.getElementById("login-history");
+    const openLoginHistoryBtn = document.getElementById("open-login-history-btn");
+    const closeLoginHistoryBtn = document.getElementById("close-login-history-btn");
     const chatScreen   = document.getElementById("chat-screen");
     const nameInput    = document.getElementById("name-input");
     const roomInput    = document.getElementById("room-input");
@@ -1527,8 +1600,7 @@
       if (!loginHistoryEl) return;
       const listData = Array.isArray(history) ? history : [];
       if (!listData.length) {
-        loginHistoryEl.innerHTML = "";
-        loginHistoryEl.style.display = "none";
+        loginHistoryEl.innerHTML = '<div class="login-history-empty">No device login records yet</div>';
         return;
       }
 
@@ -1561,7 +1633,6 @@
       loginHistoryEl.innerHTML = "";
       loginHistoryEl.appendChild(title);
       loginHistoryEl.appendChild(list);
-      loginHistoryEl.style.display = "block";
     }
 
     async function refreshLoginHistory() {
@@ -2467,6 +2538,13 @@
     });
     openStickersBtn.addEventListener("click", () => {
       stickersScreen.style.display = "flex";
+    });
+    openLoginHistoryBtn.addEventListener("click", async () => {
+      await refreshLoginHistory();
+      loginHistoryScreen.classList.add("active");
+    });
+    closeLoginHistoryBtn.addEventListener("click", () => {
+      loginHistoryScreen.classList.remove("active");
     });
     closeStickersBtn.addEventListener("click", () => {
       stickersScreen.style.display = "none";
