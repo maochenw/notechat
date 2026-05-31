@@ -121,7 +121,7 @@
     }
     .login-history {
       width: 100%;
-      max-width: 560px;
+      max-width: 720px;
       margin: 0 auto;
       text-align: left;
       border: 1px solid var(--panel-border);
@@ -143,18 +143,18 @@
       gap: .25rem;
     }
     .login-history-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
       gap: .5rem;
       font-size: .78rem;
       color: var(--text-muted);
       min-width: 0;
     }
     .login-history-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.28;
       font-weight: 600;
       color: var(--text-strong);
     }
@@ -164,12 +164,40 @@
     .login-history-time {
       color: var(--text-muted);
       flex-shrink: 0;
+      white-space: nowrap;
+      padding-top: .05rem;
     }
     .login-history-empty {
       font-size: .84rem;
       color: var(--text-muted);
       padding: .5rem 0 .25rem;
       text-align: center;
+    }
+    .sticker-launch .meta-tools {
+      display: flex;
+      justify-content: center;
+      margin-top: .35rem;
+    }
+    #open-login-history-btn {
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      background: var(--panel-soft);
+      color: var(--text-muted);
+      font-size: .78rem;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      opacity: .8;
+      transition: opacity .2s, color .2s, border-color .2s;
+    }
+    #open-login-history-btn:hover {
+      opacity: 1;
+      color: var(--accent);
+      border-color: var(--accent);
     }
     .form-input {
       width: 100%;
@@ -1275,7 +1303,6 @@
     <div class="join-inner">
       <h1>NoteChat</h1>
       <p class="subtitle">Enter a room number to join or create a chat room.</p>
-      <button class="btn-secondary" id="open-login-history-btn" style="width:100%; margin-bottom:.75rem;">Latest Device Logins</button>
       <input id="name-input" class="form-input" type="text" placeholder="Your name" maxlength="30" autofocus>
       <input id="room-input" class="form-input" type="text" placeholder="Room number" maxlength="20">
       <button class="btn-primary" id="join-btn">Join Room</button>
@@ -1297,6 +1324,9 @@
       <div class="sticker-launch">
         <button class="btn-secondary" id="open-stickers-btn" style="width:100%">Open Sticker Library</button>
         <div class="hint">Manage stickers on a dedicated page</div>
+        <div class="meta-tools">
+          <button id="open-login-history-btn" title="Latest device logins" aria-label="Open latest device logins">◷</button>
+        </div>
       </div>
     </div>
   </div>
