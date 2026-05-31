@@ -160,10 +160,39 @@
     }
 
     function getDeviceLabel() {
-      const platform = `${navigator.userAgentData?.platform || navigator.platform || "Unknown"}`.trim();
       const ua = `${navigator.userAgent || ""}`;
-      const isMobile = navigator.userAgentData?.mobile ?? /mobile|iphone|ipad|android/i.test(ua);
-      return `${platform} ${isMobile ? "Mobile" : "Desktop"}`.trim();
+      const uaData = navigator.userAgentData || null;
+      const isMobile = uaData?.mobile ?? /mobile|iphone|ipad|android/i.test(ua);
+      const isTablet = /ipad|tablet/i.test(ua);
+
+      const deviceType = isTablet ? "Tablet" : (isMobile ? "Mobile" : "Desktop");
+
+      const os = (() => {
+        const platform = `${uaData?.platform || navigator.platform || ""}`.toLowerCase();
+        if (/iphone|ipad|ipod|ios/.test(platform) || /iphone|ipad|ipod/.test(ua.toLowerCase())) return "iOS";
+        if (/android/.test(ua.toLowerCase())) return "Android";
+        if (/mac/.test(platform)) return "macOS";
+        if (/win/.test(platform)) return "Windows";
+        if (/linux/.test(platform)) return "Linux";
+        return "Unknown OS";
+      })();
+
+      const browser = (() => {
+        const low = ua.toLowerCase();
+        if (low.includes("edg/")) return "Edge";
+        if (low.includes("chrome/") && !low.includes("edg/") && !low.includes("opr/")) return "Chrome";
+        if (low.includes("safari/") && !low.includes("chrome/") && !low.includes("chromium/")) return "Safari";
+        if (low.includes("firefox/")) return "Firefox";
+        if (low.includes("opr/") || low.includes("opera/")) return "Opera";
+        return "Browser";
+      })();
+
+      const screenSize = `${Math.max(screen.width, screen.height)}x${Math.min(screen.width, screen.height)}`;
+      const model = `${uaData?.model || ""}`.trim();
+
+      const parts = [deviceType, os, browser, screenSize];
+      if (model) parts.splice(1, 0, model);
+      return parts.join(" · ").slice(0, 64);
     }
 
     form.addEventListener("submit", async (event) => {

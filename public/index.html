@@ -158,6 +158,9 @@
       font-weight: 600;
       color: var(--text-strong);
     }
+    .login-history-name.current-device {
+      color: var(--accent);
+    }
     .login-history-time {
       color: var(--text-muted);
       flex-shrink: 0;
@@ -1417,9 +1420,14 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const TAB_STORAGE_KEY = "notechat_tab_token";
+    const DEVICE_ID_KEY = "notechat_device_id";
     const LOGIN_DEVICES_LIMIT = 12;
     const CORS_PROXY_BASE = "https://api.allorigins.win/raw?url=";
     const tabToken = sessionStorage.getItem(TAB_STORAGE_KEY);
+    let currentDeviceId = "";
+    try {
+      currentDeviceId = `${localStorage.getItem(DEVICE_ID_KEY) || ""}`.trim();
+    } catch (_error) {}
 
     if (!tabToken) {
       window.location.replace("/access");
@@ -1619,7 +1627,11 @@
         nameEl.className = "login-history-name";
         const shortId = entry.deviceId.slice(0, 6);
         const baseName = entry.deviceName || "Device";
-        nameEl.textContent = `${baseName} · ${shortId}`;
+        const isCurrent = !!currentDeviceId && entry.deviceId === currentDeviceId;
+        if (isCurrent) {
+          nameEl.classList.add("current-device");
+        }
+        nameEl.textContent = `${baseName} · ${shortId}${isCurrent ? " (This device)" : ""}`;
 
         const timeEl = document.createElement("span");
         timeEl.className = "login-history-time";
