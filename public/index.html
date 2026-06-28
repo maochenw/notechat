@@ -385,6 +385,20 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .scheduled-item .room-activity {
+      display: inline-flex;
+      align-items: center;
+      gap: .32rem;
+      color: #047857;
+      font-size: .72rem;
+      font-weight: 700;
+      padding: .18rem .45rem;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, .1);
+      border: 1px solid rgba(16, 185, 129, .24);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
     .scheduled-item .remove-sched {
       background: none;
       border: none;
@@ -657,6 +671,32 @@
       background: var(--panel-soft);
       white-space: nowrap;
     }
+    .chat-header .room-activity {
+      display: none;
+      align-items: center;
+      gap: .3rem;
+      font-size: .72rem;
+      color: #047857;
+      line-height: 1;
+      padding: .28rem .55rem;
+      border-radius: 999px;
+      border: 1px solid rgba(16, 185, 129, .28);
+      background: rgba(16, 185, 129, .1);
+      white-space: nowrap;
+    }
+    .chat-header .room-activity.active {
+      display: inline-flex;
+    }
+    .chat-header .room-activity::before,
+    .scheduled-item .room-activity-dot {
+      content: "";
+      width: .42rem;
+      height: .42rem;
+      border-radius: 999px;
+      background: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, .14);
+      flex-shrink: 0;
+    }
     .chat-header .typing-indicator {
       min-height: 1.05em;
       font-size: .72rem;
@@ -746,6 +786,10 @@
       display: none;
       flex-shrink: 0;
       width: min(88%, 560px);
+      min-width: 320px;
+      max-width: calc(100% - 1.5rem);
+      min-height: 380px;
+      max-height: min(72vh, 780px);
       margin: .5rem .75rem .35rem;
       padding: .45rem;
       border-radius: 14px;
@@ -753,6 +797,8 @@
       background: var(--panel);
       flex-direction: column;
       gap: .45rem;
+      overflow: auto;
+      resize: both;
     }
     .video-panel.active {
       display: flex;
@@ -784,8 +830,8 @@
     .video-panel .video-stage {
       position: relative;
       width: 100%;
-      min-height: 280px;
-      max-height: 380px;
+      min-height: 0;
+      flex: 1 1 280px;
       aspect-ratio: 16 / 10;
       border-radius: 12px;
       overflow: hidden;
@@ -1278,10 +1324,16 @@
       }
       .video-panel {
         width: min(90%, 340px);
+        min-width: 0;
+        min-height: 0;
+        max-height: none;
         margin: .4rem .6rem .25rem;
         padding: .38rem;
+        overflow: visible;
+        resize: none;
       }
       .video-panel .video-stage {
+        flex: 0 0 auto;
         min-height: 180px;
         max-height: 260px;
       }
@@ -1375,6 +1427,7 @@
           <div class="room-topline">
             <span class="room-label" id="room-label"></span>
             <span class="user-count" id="user-count"></span>
+            <span class="room-activity" id="room-activity"></span>
           </div>
           <div class="typing-indicator" id="typing-indicator"></div>
         </div>
@@ -1493,6 +1546,7 @@
     const updateNameBtn = document.getElementById("update-name-btn");
     const roomLabel    = document.getElementById("room-label");
     const userCount    = document.getElementById("user-count");
+    const roomActivity = document.getElementById("room-activity");
     const typingIndicator = document.getElementById("typing-indicator");
     const statsStrip = document.getElementById("stats-strip");
     const messagesEl   = document.getElementById("messages");
@@ -1543,6 +1597,8 @@
     let currentStickers = [];
     let onlineStickerResults = [];
     let participantSnapshot = [];
+    let roomActivitySnapshot = null;
+    let scheduledRoomsSnapshot = [];
     let activeStickerTab = "all";
     const messagesById = new Map();
     const SEEN_DWELL_MS = 500;
@@ -1550,6 +1606,7 @@
     const seenTimers = new Map();
     const seenIntersecting = new Set();
     const typingStopDelayMs = 1200;
+    const recentRoomActivityMs = 10 * 60 * 1000;
     let typingStopTimer = null;
     let isTyping = false;
     let rtcConfig = {
@@ -1601,6 +1658,24 @@
 
     function formatTime(ts) {
       return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function isRecentlyActive(lastActiveAt) {
+      const ts = Number(lastActiveAt) || 0;
+      return ts > 0 && Date.now() - ts <= recentRoomActivityMs;
+    }
+
+    function roomActivityLabel(activity) {
+      if (!activity || !isRecentlyActive(activity.lastActiveAt)) return "";
+      const onlineCount = participantSnapshot.length;
+      return onlineCount > 0 ? "Active now" : "Recent";
+    }
+
+    function updateRoomActivity(activity = roomActivitySnapshot) {
+      roomActivitySnapshot = activity || null;
+      const label = roomActivityLabel(roomActivitySnapshot);
+      roomActivity.textContent = label;
+      roomActivity.classList.toggle("active", !!label);
     }
 
     async function fetchLoginDevices() {
@@ -2343,6 +2418,7 @@
     function renderParticipants(list) {
       if (!Array.isArray(list) || list.length === 0) {
         participantSnapshot = [];
+        updateRoomActivity();
         typingIndicator.textContent = "";
         typingIndicator.classList.remove("active");
         statsStrip.classList.remove("active");
@@ -2350,6 +2426,7 @@
         return;
       }
       participantSnapshot = list;
+      updateRoomActivity();
 
       const typingUsers = list
         .filter((p) => p.userId !== tabToken && p.typing)
@@ -2560,6 +2637,8 @@
       typingIndicator.classList.remove("active");
       statsStrip.classList.remove("active");
       statsStrip.innerHTML = "";
+      participantSnapshot = [];
+      updateRoomActivity(null);
 
       socket.emit("join-room", { room, name });
       msgInput.focus();
@@ -2764,6 +2843,7 @@
       updateSeenIndicator(messageId, seenCount);
     });
     socket.on("room-participants", renderParticipants);
+    socket.on("room-activity", updateRoomActivity);
     socket.on("user-count", (count) => { userCount.textContent = ` · ${count} online`; });
     socket.on("call-invite", async ({ fromUserId, fromName, targetUserId }) => {
       if (!isRtcTargeted(targetUserId) || fromUserId === tabToken) return;
@@ -2890,19 +2970,27 @@
     });
 
     function renderScheduledRooms(list) {
-      if (!list.length) {
+      scheduledRoomsSnapshot = Array.isArray(list) ? list : [];
+      if (!scheduledRoomsSnapshot.length) {
         scheduledList.innerHTML = '<div class="empty">No scheduled rooms yet</div>';
         return;
       }
-      scheduledList.innerHTML = list.map((s) =>
+      scheduledList.innerHTML = scheduledRoomsSnapshot.map((s) => {
+        const active = !!s?.activity?.recent;
+        const activityChip = active
+          ? '<span class="room-activity"><span class="room-activity-dot"></span>Recent</span>'
+          : "";
+        return (
         `<div class="scheduled-item" data-room="${escapeHtml(s.room)}" data-id="${escapeHtml(s.id)}">
           <div class="room-info">
             <span class="room-num">${escapeHtml(s.room)}</span>
             <span class="room-time">${escapeHtml(s.time)}</span>
+            ${activityChip}
           </div>
           <button class="remove-sched" title="Remove">&times;</button>
         </div>`
-      ).join("");
+        );
+      }).join("");
 
       scheduledList.querySelectorAll(".scheduled-item").forEach((el) => {
         el.querySelector(".remove-sched").addEventListener("click", (e) => {
@@ -2919,6 +3007,12 @@
     }
 
     socket.on("scheduled-rooms", renderScheduledRooms);
+    setInterval(() => {
+      updateRoomActivity();
+      if (scheduledRoomsSnapshot.length) {
+        renderScheduledRooms(scheduledRoomsSnapshot);
+      }
+    }, 60 * 1000);
 
     // ── Stickers ──
     stickerFileInput.multiple = true;

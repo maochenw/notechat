@@ -641,9 +641,52 @@ app.post("/upload-sticker", requireAccess, (req, res) => {
 const rooms = new Map();
 // Active participants and contribution stats per room
 const roomParticipants = new Map();
+const RECENT_ROOM_ACTIVITY_MS = 10 * 60 * 1000;
+const roomActivity = new Map();
 
 // Scheduled rooms visible on the landing page
 const scheduledRooms = [];
+
+function getRoomActivity(room) {
+  const lastActiveAt = roomActivity.get(room) || 0;
+  return {
+    room,
+    lastActiveAt,
+    recent: lastActiveAt > 0 && Date.now() - lastActiveAt <= RECENT_ROOM_ACTIVITY_MS,
+  };
+}
+
+function getScheduledRoomsWithActivity() {
+  const now = Date.now();
+  const latestActiveRoom = scheduledRooms.reduce((latest, item) => {
+    const lastActiveAt = roomActivity.get(item.room) || 0;
+    if (!lastActiveAt || now - lastActiveAt > RECENT_ROOM_ACTIVITY_MS) return latest;
+    if (!latest || lastActiveAt > latest.lastActiveAt) {
+      return { room: item.room, lastActiveAt };
+    }
+    return latest;
+  }, null);
+
+  return scheduledRooms.map((item) => ({
+    ...item,
+    activity: {
+      room: item.room,
+      lastActiveAt: roomActivity.get(item.room) || 0,
+      recent: !!latestActiveRoom && item.room === latestActiveRoom.room,
+    },
+  }));
+}
+
+function emitScheduledRooms() {
+  io.emit("scheduled-rooms", getScheduledRoomsWithActivity());
+}
+
+function markRoomActivity(room, timestamp = Date.now()) {
+  if (!room) return;
+  roomActivity.set(room, timestamp);
+  io.to(room).emit("room-activity", getRoomActivity(room));
+  emitScheduledRooms();
+}
 
 // Delete uploaded files for a room
 function cleanupRoomFiles(room) {
@@ -712,6 +755,7 @@ function emitRoomParticipants(room) {
 
   io.to(room).emit("room-participants", participants);
   io.to(room).emit("user-count", participants.length);
+  io.to(room).emit("room-activity", getRoomActivity(room));
 }
 
 io.use((socket, next) => {
@@ -746,21 +790,21 @@ io.on("connection", (socket) => {
   };
 
   // Send current state on connect
-  socket.emit("scheduled-rooms", scheduledRooms);
+  socket.emit("scheduled-rooms", getScheduledRoomsWithActivity());
   stickers = rebuildStickerList();
   socket.emit("stickers", stickers);
 
   socket.on("publish-room", ({ room, time }) => {
     if (!room || !time) return;
     scheduledRooms.push({ room, time, id: crypto.randomUUID() });
-    io.emit("scheduled-rooms", scheduledRooms);
+    emitScheduledRooms();
   });
 
   socket.on("remove-scheduled", ({ id }) => {
     const idx = scheduledRooms.findIndex((s) => s.id === id);
     if (idx !== -1) {
       scheduledRooms.splice(idx, 1);
-      io.emit("scheduled-rooms", scheduledRooms);
+      emitScheduledRooms();
     }
   });
 
@@ -778,6 +822,7 @@ io.on("connection", (socket) => {
     username = `${name || ""}`.trim().slice(0, 30);
     currentRoom = room;
     const now = Date.now();
+    markRoomActivity(room, now);
 
     socket.join(room);
 
@@ -868,7 +913,9 @@ io.on("connection", (socket) => {
     const participant = participantsMap.get(clientId);
     participant.typing = !!isTyping;
     if (participant.typing) {
-      participant.lastActiveAt = Date.now();
+      const now = Date.now();
+      participant.lastActiveAt = now;
+      markRoomActivity(currentRoom, now);
     }
     emitRoomParticipants(currentRoom);
   });
@@ -1010,11 +1057,13 @@ io.on("connection", (socket) => {
     if (participantsMap?.has(clientId)) {
       const stats = getMessageStats(msg);
       const participant = participantsMap.get(clientId);
+      const now = Date.now();
       participant.msgs += 1;
       participant.words += stats.words;
       participant.chars += stats.chars;
       participant.typing = false;
-      participant.lastActiveAt = Date.now();
+      participant.lastActiveAt = now;
+      markRoomActivity(currentRoom, now);
       emitRoomParticipants(currentRoom);
     }
   });
@@ -1036,7 +1085,9 @@ io.on("connection", (socket) => {
 
     msg.seenBy.push(clientId);
     if (participant) {
-      participant.lastActiveAt = Date.now();
+      const now = Date.now();
+      participant.lastActiveAt = now;
+      markRoomActivity(currentRoom, now);
       emitRoomParticipants(currentRoom);
     }
     const seenCount = Math.max(0, msg.seenBy.length - 1);
@@ -1051,6 +1102,10 @@ io.on("connection", (socket) => {
 
     const participantsMap = roomParticipants.get(currentRoom);
     if (participantsMap) {
+      const participant = participantsMap.get(clientId);
+      if (participant) {
+        markRoomActivity(currentRoom, Date.now());
+      }
       participantsMap.delete(clientId);
       emitRoomParticipants(currentRoom);
     }
