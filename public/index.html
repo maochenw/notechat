@@ -56,9 +56,16 @@
       background: var(--panel);
       box-shadow: 0 10px 24px rgba(56, 73, 89, .14);
     }
+    .join-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .55rem;
+      margin-bottom: .25rem;
+    }
     #join-screen h1 {
       font-size: 2rem;
-      margin-bottom: .25rem;
+      margin-bottom: 0;
       color: var(--text-strong);
     }
     #join-screen .subtitle {
@@ -173,11 +180,6 @@
       padding: .5rem 0 .25rem;
       text-align: center;
     }
-    .sticker-launch .meta-tools {
-      display: flex;
-      justify-content: center;
-      margin-top: .35rem;
-    }
     #open-login-history-btn {
       width: 24px;
       height: 24px;
@@ -198,6 +200,119 @@
       opacity: 1;
       color: var(--accent);
       border-color: var(--accent);
+    }
+    #images-screen {
+      display: none;
+      flex-direction: column;
+      position: fixed;
+      inset: 0;
+      background: var(--bg-base);
+      z-index: 40;
+    }
+    #images-screen.active {
+      display: flex;
+    }
+    .images-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .6rem;
+      padding: .75rem 1rem;
+      border-bottom: 1px solid var(--panel-border);
+      background: var(--panel);
+      flex-shrink: 0;
+    }
+    .images-header .title {
+      font-weight: 700;
+      color: var(--text-strong);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .images-header #close-images-btn {
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: var(--panel-soft);
+      color: var(--text-strong);
+      font-size: .85rem;
+      font-weight: 600;
+      min-height: 36px;
+      padding: .6rem .95rem;
+      cursor: pointer;
+      line-height: 1;
+      transition: border-color .2s, color .2s, background .2s;
+    }
+    .images-header #close-images-btn:hover {
+      border-color: var(--accent);
+      color: #fff;
+      background: var(--accent);
+    }
+    .images-body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 1rem;
+    }
+    .shared-image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: .85rem;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    .shared-image-card {
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .shared-image-card img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      cursor: pointer;
+      background: var(--panel-soft);
+    }
+    .shared-image-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: .5rem;
+      padding: .55rem .65rem;
+      font-size: .76rem;
+      color: var(--text-muted);
+      min-width: 0;
+    }
+    .shared-image-meta strong {
+      color: var(--text-strong);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .shared-image-delete {
+      margin: 0 .65rem .65rem;
+      width: calc(100% - 1.3rem);
+      min-height: 32px;
+      border: 1px solid rgba(239, 68, 68, .32);
+      border-radius: 8px;
+      background: rgba(239, 68, 68, .08);
+      color: #b91c1c;
+      font-size: .78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .shared-image-delete:hover {
+      background: rgba(239, 68, 68, .14);
+    }
+    .shared-image-grid .empty {
+      grid-column: 1 / -1;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 2rem 0;
+    }
+    #shared-image-input {
+      display: none;
     }
     .form-input {
       width: 100%;
@@ -417,6 +532,9 @@
       color: var(--text-muted);
       font-size: .75rem;
       text-align: center;
+    }
+    .sticker-launch {
+      margin-bottom: .65rem;
     }
     #sticker-file-input { display: none; }
     .sticker-grid {
@@ -1362,7 +1480,10 @@
   <!-- Join Screen -->
   <div id="join-screen">
     <div class="join-inner">
-      <h1>NoteChat</h1>
+      <div class="join-title-row">
+        <h1>NoteChat</h1>
+        <button id="open-login-history-btn" title="Latest device logins" aria-label="Open latest device logins">◷</button>
+      </div>
       <p class="subtitle">Enter a room number to join or create a chat room.</p>
       <input id="name-input" class="form-input" type="text" placeholder="Your name" maxlength="30" autofocus>
       <input id="room-input" class="form-input" type="text" placeholder="Room number" maxlength="20">
@@ -1380,15 +1501,11 @@
         <div class="empty">No scheduled rooms yet</div>
       </div>
 
-      <div class="divider">custom stickers</div>
-
       <div class="sticker-launch">
         <button class="btn-secondary" id="open-stickers-btn" style="width:100%">Open Sticker Library</button>
-        <div class="hint">Manage stickers on a dedicated page</div>
-        <div class="meta-tools">
-          <button id="open-login-history-btn" title="Latest device logins" aria-label="Open latest device logins">◷</button>
-        </div>
       </div>
+
+      <button class="btn-secondary" id="open-images-btn" style="width:100%">Open Image Sharing</button>
     </div>
   </div>
 
@@ -1400,6 +1517,20 @@
     </div>
     <div class="login-history-body">
       <div class="login-history" id="login-history"></div>
+    </div>
+  </div>
+
+  <div id="images-screen">
+    <div class="images-header">
+      <button id="close-images-btn">Back</button>
+      <span class="title">Image Sharing</span>
+      <button class="btn-secondary" id="upload-shared-image-btn">Upload Image</button>
+    </div>
+    <div class="images-body">
+      <input type="file" id="shared-image-input" accept="image/*">
+      <div class="shared-image-grid" id="shared-image-grid">
+        <div class="empty">No shared images yet</div>
+      </div>
     </div>
   </div>
 
@@ -1549,6 +1680,12 @@
     const stickersScreen = document.getElementById("stickers-screen");
     const openStickersBtn = document.getElementById("open-stickers-btn");
     const closeStickersBtn = document.getElementById("close-stickers-btn");
+    const imagesScreen = document.getElementById("images-screen");
+    const openImagesBtn = document.getElementById("open-images-btn");
+    const closeImagesBtn = document.getElementById("close-images-btn");
+    const uploadSharedImageBtn = document.getElementById("upload-shared-image-btn");
+    const sharedImageInput = document.getElementById("shared-image-input");
+    const sharedImageGrid = document.getElementById("shared-image-grid");
     const leaveBtn     = document.getElementById("leave-btn");
     const clearRoomBtn = document.getElementById("clear-room-btn");
     const videoCallBtn = document.getElementById("video-call-btn");
@@ -1676,9 +1813,10 @@
 
     function roomActivityLabel(activity) {
       if (activity?.deleted) return "Deleted";
-      if (!activity || !isRecentlyActive(activity.lastActiveAt)) return "";
       const onlineCount = participantSnapshot.length;
-      return onlineCount > 0 ? "Active now" : "Recent";
+      if (onlineCount > 0) return "Active now";
+      if (!activity || !isRecentlyActive(activity.lastActiveAt)) return "";
+      return "Recent";
     }
 
     function updateRoomActivity(activity = roomActivitySnapshot) {
@@ -1769,7 +1907,12 @@
     }
 
     function escapeHtml(str) {
-      return `${str || ""}`.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return `${str || ""}`
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     }
 
     function renderMedia(msg) {
@@ -1779,6 +1922,79 @@
       }
       const mediaUrl = withTab(msg.fileUrl);
       return `<img src="${mediaUrl}" alt="shared image" onclick="openLightbox('${mediaUrl}')">`;
+    }
+
+    function renderSharedImages(list) {
+      const images = Array.isArray(list) ? list : [];
+      if (!images.length) {
+        sharedImageGrid.innerHTML = '<div class="empty">No shared images yet</div>';
+        return;
+      }
+      sharedImageGrid.innerHTML = images.map((image) => {
+        const imageUrl = withTab(image.url || "");
+        return (
+          `<div class="shared-image-card">
+            <img src="${imageUrl}" alt="${escapeHtml(image.originalName || "Shared image")}" data-full-src="${imageUrl}">
+            <div class="shared-image-meta">
+              <strong>${escapeHtml(image.name || "Someone")}</strong>
+              <span>${escapeHtml(formatTime(image.timestamp || Date.now()))}</span>
+            </div>
+            <button class="shared-image-delete" data-image-id="${escapeHtml(image.id || "")}">Delete</button>
+          </div>`
+        );
+      }).join("");
+      sharedImageGrid.querySelectorAll("img[data-full-src]").forEach((img) => {
+        img.addEventListener("click", () => openLightbox(img.dataset.fullSrc));
+      });
+      sharedImageGrid.querySelectorAll(".shared-image-delete").forEach((button) => {
+        button.addEventListener("click", () => {
+          deleteSharedImage(button.dataset.imageId);
+        });
+      });
+    }
+
+    async function uploadSharedImage(file) {
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        alert("Please choose an image file.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", myName || nameInput.value.trim() || "Someone");
+
+      try {
+        const res = await fetch(withTab("/shared-image"), { method: "POST", body: formData, headers: authHeaders });
+        if (!res.ok) {
+          let message = "Upload failed";
+          try {
+            const data = await res.json();
+            message = data?.error || message;
+          } catch (_error) {}
+          throw new Error(message);
+        }
+      } catch (_error) {
+        alert(`Failed to upload image. ${_error.message || "Please try again."}`);
+      } finally {
+        sharedImageInput.value = "";
+      }
+    }
+
+    async function deleteSharedImage(imageId) {
+      const id = `${imageId || ""}`.trim();
+      if (!id) return;
+      if (!window.confirm("Delete this image?")) return;
+
+      try {
+        const res = await fetch(`/shared-image/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          headers: authHeaders,
+        });
+        if (!res.ok) throw new Error("Delete failed");
+      } catch (_error) {
+        alert("Failed to delete image. Please try again.");
+      }
     }
 
     function summarizeReply(msg) {
@@ -2671,6 +2887,16 @@
     openStickersBtn.addEventListener("click", () => {
       stickersScreen.style.display = "flex";
     });
+    openImagesBtn.addEventListener("click", () => {
+      imagesScreen.classList.add("active");
+    });
+    closeImagesBtn.addEventListener("click", () => {
+      imagesScreen.classList.remove("active");
+    });
+    uploadSharedImageBtn.addEventListener("click", () => sharedImageInput.click());
+    sharedImageInput.addEventListener("change", () => {
+      uploadSharedImage(sharedImageInput.files[0]);
+    });
     openLoginHistoryBtn.addEventListener("click", async () => {
       await refreshLoginHistory();
       loginHistoryScreen.classList.add("active");
@@ -2732,9 +2958,12 @@
     // ── File attachment ──
     attachBtn.addEventListener("click", () => fileInput.click());
 
-    fileInput.addEventListener("change", () => {
-      const file = fileInput.files[0];
+    function selectPendingFile(file) {
       if (!file) return;
+      if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+        alert("Please choose an image or video file.");
+        return;
+      }
       pendingFile = file;
       fileName.textContent = file.name;
       fileThumb.innerHTML = "";
@@ -2751,6 +2980,10 @@
       }
 
       filePreview.classList.add("active");
+    }
+
+    fileInput.addEventListener("change", () => {
+      selectPendingFile(fileInput.files[0]);
     });
 
     removeFile.addEventListener("click", clearPendingFile);
@@ -2855,6 +3088,7 @@
     });
     socket.on("room-participants", renderParticipants);
     socket.on("room-activity", updateRoomActivity);
+    socket.on("shared-images", renderSharedImages);
     socket.on("user-count", (count) => { userCount.textContent = ` · ${count} online`; });
     socket.on("call-invite", async ({ fromUserId, fromName, targetUserId }) => {
       if (!isRtcTargeted(targetUserId) || fromUserId === tabToken) return;

@@ -151,6 +151,25 @@ const upload = multer({
   },
 });
 
+function isImageUpload(file) {
+  const ext = path.extname(`${file?.originalname || ""}`).toLowerCase();
+  const mime = `${file?.mimetype || ""}`.toLowerCase();
+  const imageExts = new Set([".gif", ".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif"]);
+  return mime.startsWith("image/") || ((mime === "" || mime === "application/octet-stream") && imageExts.has(ext));
+}
+
+const sharedImageUpload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (isImageUpload(file)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed"));
+    }
+  },
+});
+
 // Configure multer for sticker uploads
 const stickerStorage = multer.diskStorage({
   destination: STICKERS_DIR,
@@ -258,6 +277,48 @@ app.post("/upload", requireAccess, upload.single("file"), (req, res) => {
   const fileUrl = `/uploads/${req.file.filename}`;
   const mediaType = req.file.mimetype.startsWith("video/") ? "video" : "image";
   res.json({ url: fileUrl, mediaType });
+});
+
+app.post("/shared-image", requireAccess, (req, res) => {
+  sharedImageUpload.single("file")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || "Image upload failed" });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    if (!isImageUpload(req.file)) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ error: "Only image files are allowed" });
+    }
+
+    const image = {
+      id: crypto.randomUUID(),
+      url: `/uploads/${req.file.filename}`,
+      name: `${req.body.name || "Someone"}`.trim().slice(0, 30) || "Someone",
+      originalName: `${req.file.originalname || "Image"}`.trim().slice(0, 120),
+      timestamp: Date.now(),
+    };
+    sharedImages.unshift(image);
+    emitSharedImages();
+    return res.json({ image, images: sharedImages });
+  });
+});
+
+app.delete("/shared-image/:id", requireAccess, (req, res) => {
+  const id = `${req.params.id || ""}`.trim();
+  const idx = sharedImages.findIndex((image) => image.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Image not found" });
+  }
+
+  const [removedImage] = sharedImages.splice(idx, 1);
+  if (removedImage?.url) {
+    const filePath = path.join(UPLOADS_DIR, path.basename(removedImage.url));
+    fs.unlink(filePath, () => {});
+  }
+  emitSharedImages();
+  return res.json({ ok: true, images: sharedImages });
 });
 
 function isStickerFile(filePath) {
@@ -644,6 +705,7 @@ const roomParticipants = new Map();
 const RECENT_ROOM_ACTIVITY_MS = 10 * 60 * 1000;
 const roomActivity = new Map();
 const deletedRooms = new Set();
+const sharedImages = [];
 
 // Scheduled rooms visible on the landing page
 const scheduledRooms = [];
@@ -681,6 +743,10 @@ function getScheduledRoomsWithActivity() {
 
 function emitScheduledRooms() {
   io.emit("scheduled-rooms", getScheduledRoomsWithActivity());
+}
+
+function emitSharedImages() {
+  io.emit("shared-images", sharedImages);
 }
 
 function markRoomActivity(room, timestamp = Date.now()) {
@@ -793,6 +859,7 @@ io.on("connection", (socket) => {
 
   // Send current state on connect
   socket.emit("scheduled-rooms", getScheduledRoomsWithActivity());
+  socket.emit("shared-images", sharedImages);
   stickers = rebuildStickerList();
   socket.emit("stickers", stickers);
 
