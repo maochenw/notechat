@@ -643,6 +643,7 @@ const rooms = new Map();
 const roomParticipants = new Map();
 const RECENT_ROOM_ACTIVITY_MS = 10 * 60 * 1000;
 const roomActivity = new Map();
+const deletedRooms = new Set();
 
 // Scheduled rooms visible on the landing page
 const scheduledRooms = [];
@@ -651,6 +652,7 @@ function getRoomActivity(room) {
   const lastActiveAt = roomActivity.get(room) || 0;
   return {
     room,
+    deleted: deletedRooms.has(room),
     lastActiveAt,
     recent: lastActiveAt > 0 && Date.now() - lastActiveAt <= RECENT_ROOM_ACTIVITY_MS,
   };
@@ -796,6 +798,7 @@ io.on("connection", (socket) => {
 
   socket.on("publish-room", ({ room, time }) => {
     if (!room || !time) return;
+    deletedRooms.delete(room);
     scheduledRooms.push({ room, time, id: crypto.randomUUID() });
     emitScheduledRooms();
   });
@@ -803,8 +806,22 @@ io.on("connection", (socket) => {
   socket.on("remove-scheduled", ({ id }) => {
     const idx = scheduledRooms.findIndex((s) => s.id === id);
     if (idx !== -1) {
-      scheduledRooms.splice(idx, 1);
+      const [removedRoom] = scheduledRooms.splice(idx, 1);
       emitScheduledRooms();
+      if (removedRoom?.room) {
+        deletedRooms.add(removedRoom.room);
+        const deletionMsg = {
+          id: crypto.randomUUID(),
+          type: "system",
+          text: `Room ${removedRoom.room} was deleted`,
+          timestamp: Date.now(),
+        };
+        if (rooms.has(removedRoom.room)) {
+          rooms.get(removedRoom.room).push(deletionMsg);
+        }
+        io.to(removedRoom.room).emit("room-activity", getRoomActivity(removedRoom.room));
+        io.to(removedRoom.room).emit("message", deletionMsg);
+      }
     }
   });
 

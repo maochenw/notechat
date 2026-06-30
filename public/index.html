@@ -687,6 +687,11 @@
     .chat-header .room-activity.active {
       display: inline-flex;
     }
+    .chat-header .room-activity.deleted {
+      color: #b91c1c;
+      border-color: rgba(239, 68, 68, .32);
+      background: rgba(239, 68, 68, .1);
+    }
     .chat-header .room-activity::before,
     .scheduled-item .room-activity-dot {
       content: "";
@@ -696,6 +701,10 @@
       background: #10b981;
       box-shadow: 0 0 0 3px rgba(16, 185, 129, .14);
       flex-shrink: 0;
+    }
+    .chat-header .room-activity.deleted::before {
+      background: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, .14);
     }
     .chat-header .typing-indicator {
       min-height: 1.05em;
@@ -1666,6 +1675,7 @@
     }
 
     function roomActivityLabel(activity) {
+      if (activity?.deleted) return "Deleted";
       if (!activity || !isRecentlyActive(activity.lastActiveAt)) return "";
       const onlineCount = participantSnapshot.length;
       return onlineCount > 0 ? "Active now" : "Recent";
@@ -1676,6 +1686,7 @@
       const label = roomActivityLabel(roomActivitySnapshot);
       roomActivity.textContent = label;
       roomActivity.classList.toggle("active", !!label);
+      roomActivity.classList.toggle("deleted", !!roomActivitySnapshot?.deleted);
     }
 
     async function fetchLoginDevices() {
