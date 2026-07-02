@@ -1788,7 +1788,6 @@
     const autoTorchCanvas = document.createElement("canvas");
     const AUTO_TORCH_CHECK_MS = 1800;
     const AUTO_TORCH_DARK_THRESHOLD = 55;
-    const AUTO_TORCH_BRIGHT_THRESHOLD = 95;
     const STICKER_FAVORITES_KEY = "notechat_sticker_favorites";
     const STICKER_RECENTS_KEY = "notechat_sticker_recents";
     let favoriteStickerIds = new Set(JSON.parse(localStorage.getItem(STICKER_FAVORITES_KEY) || "[]"));
@@ -2326,12 +2325,11 @@
         if (autoTorchEnabled) void setAutoTorch(false);
         return;
       }
+      if (autoTorchEnabled) return;
       const brightness = sampleLocalVideoBrightness();
       if (brightness === null) return;
       if (brightness < AUTO_TORCH_DARK_THRESHOLD) {
         void setAutoTorch(true);
-      } else if (brightness > AUTO_TORCH_BRIGHT_THRESHOLD) {
-        void setAutoTorch(false);
       }
     }
 
