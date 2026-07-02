@@ -1772,6 +1772,7 @@
     let callPeerUserId = null;
     let callPeerName = "";
     let localMediaAvailable = false;
+    let localMediaUnavailableReason = "";
     let micEnabled = false;
     let cameraEnabled = true;
     let preferredFacingMode = "user";
@@ -1780,6 +1781,14 @@
     let knownVideoInputDeviceIds = [];
     let activeVideoDeviceId = "";
     let selfViewPrimary = false;
+    let autoTorchTimer = null;
+    let autoTorchStartHandler = null;
+    let autoTorchEnabled = false;
+    let autoTorchBusy = false;
+    const autoTorchCanvas = document.createElement("canvas");
+    const AUTO_TORCH_CHECK_MS = 1800;
+    const AUTO_TORCH_DARK_THRESHOLD = 55;
+    const AUTO_TORCH_BRIGHT_THRESHOLD = 95;
     const STICKER_FAVORITES_KEY = "notechat_sticker_favorites";
     const STICKER_RECENTS_KEY = "notechat_sticker_recents";
     let favoriteStickerIds = new Set(JSON.parse(localStorage.getItem(STICKER_FAVORITES_KEY) || "[]"));
@@ -2106,9 +2115,14 @@
     }
 
     async function getLocalMediaStream() {
+      if (!window.isSecureContext) {
+        throw new Error("Camera requires HTTPS or localhost");
+      }
       const tryList = [
         { video: { facingMode: { ideal: preferredFacingMode } }, audio: true },
         { video: true, audio: true },
+        { video: { facingMode: { ideal: preferredFacingMode } }, audio: false },
+        { video: true, audio: false },
       ];
       let lastError = null;
       for (const constraints of tryList) {
@@ -2251,17 +2265,125 @@
       videoPanel.classList.toggle("swapped-view", selfViewPrimary);
     }
 
+    function getActiveVideoTrack() {
+      return localStream?.getVideoTracks().find((track) => track.readyState === "live") || null;
+    }
+
+    function trackSupportsTorch(track) {
+      try {
+        return !!track?.getCapabilities?.().torch;
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    async function setAutoTorch(enabled) {
+      const track = getActiveVideoTrack();
+      if (!trackSupportsTorch(track)) {
+        autoTorchEnabled = false;
+        return false;
+      }
+      if (autoTorchBusy || autoTorchEnabled === enabled) return autoTorchEnabled;
+      autoTorchBusy = true;
+      try {
+        await track.applyConstraints({ advanced: [{ torch: !!enabled }] });
+        autoTorchEnabled = !!enabled;
+        return autoTorchEnabled;
+      } catch (_error) {
+        autoTorchEnabled = false;
+        return false;
+      } finally {
+        autoTorchBusy = false;
+      }
+    }
+
+    function sampleLocalVideoBrightness() {
+      if (!localVideo || localVideo.readyState < 2 || !localVideo.videoWidth || !localVideo.videoHeight) {
+        return null;
+      }
+      const width = 32;
+      const height = 24;
+      autoTorchCanvas.width = width;
+      autoTorchCanvas.height = height;
+      const context = autoTorchCanvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return null;
+      try {
+        context.drawImage(localVideo, 0, 0, width, height);
+        const pixels = context.getImageData(0, 0, width, height).data;
+        let total = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          total += (pixels[index] * 0.2126) + (pixels[index + 1] * 0.7152) + (pixels[index + 2] * 0.0722);
+        }
+        return total / (pixels.length / 4);
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function checkAutoTorch() {
+      const track = getActiveVideoTrack();
+      if (!callActive || !cameraEnabled || !trackSupportsTorch(track)) {
+        if (autoTorchEnabled) void setAutoTorch(false);
+        return;
+      }
+      const brightness = sampleLocalVideoBrightness();
+      if (brightness === null) return;
+      if (brightness < AUTO_TORCH_DARK_THRESHOLD) {
+        void setAutoTorch(true);
+      } else if (brightness > AUTO_TORCH_BRIGHT_THRESHOLD) {
+        void setAutoTorch(false);
+      }
+    }
+
+    function stopAutoTorchMonitor() {
+      if (autoTorchStartHandler) {
+        localVideo.removeEventListener("canplay", autoTorchStartHandler);
+        autoTorchStartHandler = null;
+      }
+      if (autoTorchTimer) {
+        clearInterval(autoTorchTimer);
+        autoTorchTimer = null;
+      }
+      if (autoTorchEnabled) void setAutoTorch(false);
+    }
+
+    function startAutoTorchMonitor() {
+      stopAutoTorchMonitor();
+      const track = getActiveVideoTrack();
+      if (!trackSupportsTorch(track)) return;
+      const startChecks = () => {
+        autoTorchStartHandler = null;
+        checkAutoTorch();
+        autoTorchTimer = window.setInterval(checkAutoTorch, AUTO_TORCH_CHECK_MS);
+      };
+      if (localVideo.readyState >= 2) {
+        startChecks();
+      } else {
+        autoTorchStartHandler = startChecks;
+        localVideo.addEventListener("canplay", autoTorchStartHandler, { once: true });
+      }
+    }
+
     async function ensureLocalStream({ allowNoMedia = false } = {}) {
-      if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
+      if (!window.isSecureContext) {
+        throw new Error("Camera requires HTTPS or localhost");
+      }
+      if (!window.RTCPeerConnection) {
         throw new Error("Video chat is not supported in this browser");
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera access is not available in this browser");
       }
       if (localStream && localStream.getTracks().some((track) => track.readyState === "live")) {
         localMediaAvailable = true;
+        localMediaUnavailableReason = "";
+        startAutoTorchMonitor();
         return localStream;
       }
       try {
         localStream = await getLocalMediaStream();
         localMediaAvailable = true;
+        localMediaUnavailableReason = "";
         micEnabled = false;
         cameraEnabled = true;
         localStream.getAudioTracks().forEach((track) => { track.enabled = micEnabled; });
@@ -2269,6 +2391,7 @@
         activeVideoDeviceId = localStream.getVideoTracks()[0]?.getSettings?.().deviceId || "";
         await refreshVideoInputDevices();
         localVideo.srcObject = localStream;
+        startAutoTorchMonitor();
         if (peerConnection) {
           const existingKinds = new Set(
             peerConnection.getSenders()
@@ -2285,6 +2408,7 @@
         return localStream;
       } catch (error) {
         localMediaAvailable = false;
+        localMediaUnavailableReason = error?.message || "Camera/mic unavailable";
         if (allowNoMedia) {
           localStream = null;
           localVideo.srcObject = null;
@@ -2417,6 +2541,7 @@
     }
 
     function stopLocalStream() {
+      stopAutoTorchMonitor();
       if (localStream) {
         localStream.getTracks().forEach((track) => track.stop());
       }
@@ -2450,6 +2575,23 @@
       updateVideoButtons();
     }
 
+    function failVideoCall(reason = "Video chat failed") {
+      resetPeerConnection();
+      stopLocalStream();
+      callActive = false;
+      callPeerUserId = null;
+      callPeerName = "";
+      localMediaAvailable = false;
+      micEnabled = false;
+      cameraEnabled = true;
+      switchingCamera = false;
+      selfViewPrimary = false;
+      videoPanel.classList.add("active");
+      updateVideoLayoutMode();
+      setVideoStatus(reason);
+      updateVideoButtons();
+    }
+
     async function switchCamera() {
       if (!localMediaAvailable || !localStream || switchingCamera || !isPhoneLikeDevice()) return;
       const hasLocalVideoTrack = localStream.getVideoTracks().some((track) => track.readyState === "live");
@@ -2459,6 +2601,7 @@
       const targetFacingMode = preferredFacingMode === "user" ? "environment" : "user";
       updateVideoButtons();
       try {
+        stopAutoTorchMonitor();
         const nextVideoTrack = await getSwitchedCameraVideoTrack(targetFacingMode);
         nextVideoTrack.enabled = cameraEnabled;
 
@@ -2469,6 +2612,7 @@
         });
         localStream.addTrack(nextVideoTrack);
         localVideo.srcObject = localStream;
+        startAutoTorchMonitor();
 
         if (peerConnection) {
           const sender = peerConnection.getSenders().find((s) => s.track && s.track.kind === "video");
@@ -2495,11 +2639,9 @@
         endVideoCall({ notifyPeer: true, reason: "Video is off" });
         return;
       }
-      const peer = getPrimaryPeerParticipant();
-
       callActive = true;
-      callPeerUserId = peer?.userId || null;
-      callPeerName = peer?.name || "";
+      callPeerUserId = null;
+      callPeerName = "";
       videoPanel.classList.add("active");
       setVideoStatus("Starting camera...");
       updateVideoButtons();
@@ -2507,21 +2649,18 @@
       try {
         await ensureLocalStream({ allowNoMedia: true });
         if (!localMediaAvailable) {
-          setVideoStatus("Camera busy, starting viewer call...");
+          setVideoStatus(`${localMediaUnavailableReason || "Camera unavailable"}, starting viewer call...`);
         }
-        if (callPeerUserId) {
-          setVideoStatus(`Calling ${callPeerName || "peer"}...`);
-        } else {
-          setVideoStatus("Waiting for someone to join video...");
-        }
-        socket.emit("call-invite", { targetUserId: callPeerUserId });
+        setVideoStatus("Waiting for someone to join video...");
+        socket.emit("call-invite", { targetUserId: null });
       } catch (error) {
-        endVideoCall({ notifyPeer: false, reason: "Camera/mic access failed" });
+        failVideoCall(error?.message || localMediaUnavailableReason || "Camera/mic access failed");
       }
     }
 
     async function acceptIncomingVideoCall(fromUserId, fromName) {
-      if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
+      if (!window.isSecureContext || !window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
+        failVideoCall(!window.isSecureContext ? "Camera requires HTTPS or localhost" : "Video chat is not supported in this browser");
         socket.emit("call-declined", { targetUserId: fromUserId });
         return;
       }
@@ -2547,12 +2686,12 @@
       try {
         await ensureLocalStream({ allowNoMedia: true });
         if (!localMediaAvailable) {
-          setVideoStatus("Camera busy, joined as viewer");
+          setVideoStatus(`${localMediaUnavailableReason || "Camera unavailable"}, joined as viewer`);
         }
         socket.emit("call-accepted", { targetUserId: fromUserId });
       } catch (_error) {
         socket.emit("call-declined", { targetUserId: fromUserId });
-        endVideoCall({ notifyPeer: false, reason: "Camera/mic access failed" });
+        failVideoCall(localMediaUnavailableReason || "Camera/mic access failed");
       }
     }
 
@@ -2927,6 +3066,11 @@
       if (!localMediaAvailable || !localStream) return;
       cameraEnabled = !cameraEnabled;
       localStream.getVideoTracks().forEach((track) => { track.enabled = cameraEnabled; });
+      if (cameraEnabled) {
+        startAutoTorchMonitor();
+      } else {
+        stopAutoTorchMonitor();
+      }
       updateVideoButtons();
     });
     videoSwitchCameraBtn.addEventListener("click", () => {
@@ -3106,11 +3250,11 @@
       try {
         await ensureLocalStream({ allowNoMedia: true });
         if (!localMediaAvailable) {
-          setVideoStatus("Camera busy, joined as viewer");
+          setVideoStatus(`${localMediaUnavailableReason || "Camera unavailable"}, joined as viewer`);
         }
         await createAndSendOffer();
       } catch (_error) {
-        endVideoCall({ notifyPeer: false, reason: "Failed to start call" });
+        failVideoCall(localMediaUnavailableReason || "Failed to start call");
       }
     });
     socket.on("call-declined", ({ fromUserId, targetUserId }) => {
@@ -3144,7 +3288,7 @@
       try {
         await ensureLocalStream({ allowNoMedia: true });
         if (!localMediaAvailable) {
-          setVideoStatus("Camera busy, joined as viewer");
+          setVideoStatus(`${localMediaUnavailableReason || "Camera unavailable"}, joined as viewer`);
         }
         const pc = ensurePeerConnection();
         await pc.setRemoteDescription(new RTCSessionDescription(sdp));
@@ -3158,7 +3302,7 @@
         setVideoStatus("Connecting...");
         scheduleConnectionWatchdog(20000, "Unable to establish video connection");
       } catch (_error) {
-        endVideoCall({ notifyPeer: false, reason: "Failed to connect call" });
+        failVideoCall(localMediaUnavailableReason || "Failed to connect call");
       }
     });
     socket.on("webrtc-answer", async ({ fromUserId, targetUserId, sdp }) => {
@@ -3170,7 +3314,7 @@
         setVideoStatus("Connecting...");
         scheduleConnectionWatchdog(20000, "Unable to establish video connection");
       } catch (_error) {
-        endVideoCall({ notifyPeer: false, reason: "Call answer failed" });
+        failVideoCall("Call answer failed");
       }
     });
     socket.on("webrtc-ice-candidate", async ({ fromUserId, targetUserId, candidate }) => {
@@ -3197,7 +3341,7 @@
     });
     socket.on("disconnect", () => {
       if (!callActive) return;
-      endVideoCall({ notifyPeer: false, reason: "Disconnected from server" });
+      failVideoCall("Disconnected from server");
     });
 
     // ── Scheduled rooms ──
