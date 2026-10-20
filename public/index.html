@@ -256,7 +256,7 @@
     }
     .shared-image-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
       gap: .85rem;
       max-width: 980px;
       margin: 0 auto;
@@ -311,6 +311,26 @@
       text-align: center;
       padding: 2rem 0;
     }
+    .shared-note-composer {
+      max-width: 980px;
+      margin: 0 auto 1.25rem;
+      padding: 1rem;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      background: var(--panel);
+    }
+    .shared-note-composer label { display: block; font-weight: 700; margin-bottom: .6rem; }
+    .shared-note-composer textarea { resize: vertical; min-height: 100px; font-family: inherit; }
+    #shared-note-hint, #shared-note-status { font-size: .8rem; color: var(--text-muted); margin-bottom: .75rem; }
+    #shared-note-status { margin: .6rem 0 0; overflow-wrap: anywhere; }
+    .shared-note-actions { display: flex; justify-content: space-between; gap: .75rem; }
+    .shared-note-actions button { width: auto; }
+    .shared-note-actions button:disabled { opacity: .5; cursor: default; }
+    .shared-note-text { padding: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+    .shared-note-previews { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: .75rem; }
+    .shared-note-preview { width: 90px; }
+    .shared-note-preview img { width: 90px; height: 70px; object-fit: cover; border-radius: 6px; }
+    .shared-note-preview button { width: 100%; cursor: pointer; padding: .3rem; }
     #shared-image-input {
       display: none;
     }
@@ -1505,7 +1525,7 @@
         <button class="btn-secondary" id="open-stickers-btn" style="width:100%">Open Sticker Library</button>
       </div>
 
-      <button class="btn-secondary" id="open-images-btn" style="width:100%">Open Image Sharing</button>
+      <button class="btn-secondary" id="open-images-btn" style="width:100%">Open Notes &amp; Photos</button>
     </div>
   </div>
 
@@ -1523,13 +1543,24 @@
   <div id="images-screen">
     <div class="images-header">
       <button id="close-images-btn">Back</button>
-      <span class="title">Image Sharing</span>
-      <button class="btn-secondary" id="upload-shared-image-btn">Upload Image</button>
+      <span class="title">Notes &amp; Photos</span>
+      <span></span>
     </div>
     <div class="images-body">
-      <input type="file" id="shared-image-input" accept="image/*">
+      <form id="shared-note-form" class="shared-note-composer">
+        <label for="shared-note-text">Share a note</label>
+        <textarea id="shared-note-text" class="form-input" rows="4" maxlength="10000" placeholder="Write a note, add photos, or both…" aria-describedby="shared-note-hint"></textarea>
+        <p id="shared-note-hint">Shared with everyone who has app access. Up to 10 images, 50 MB each. Posts clear when the server restarts.</p>
+        <input type="file" id="shared-image-input" accept="image/*" multiple>
+        <div id="shared-note-previews" class="shared-note-previews"></div>
+        <div class="shared-note-actions">
+          <button type="button" class="btn-secondary" id="upload-shared-image-btn">Add Images</button>
+          <button type="submit" class="btn-primary" id="share-note-btn" disabled>Share</button>
+        </div>
+        <p id="shared-note-status" role="status" aria-live="polite"></p>
+      </form>
       <div class="shared-image-grid" id="shared-image-grid">
-        <div class="empty">No shared images yet</div>
+        <div class="empty">No shared notes or photos yet</div>
       </div>
     </div>
   </div>
@@ -1686,6 +1717,14 @@
     const uploadSharedImageBtn = document.getElementById("upload-shared-image-btn");
     const sharedImageInput = document.getElementById("shared-image-input");
     const sharedImageGrid = document.getElementById("shared-image-grid");
+    const sharedNoteForm = document.getElementById("shared-note-form");
+    const sharedNoteText = document.getElementById("shared-note-text");
+    const shareNoteBtn = document.getElementById("share-note-btn");
+    const sharedNoteStatus = document.getElementById("shared-note-status");
+    const sharedNotePreviews = document.getElementById("shared-note-previews");
+    let sharedNoteFiles = [];
+    let sharedNotePreviewUrls = [];
+    let sharingNote = false;
     const leaveBtn     = document.getElementById("leave-btn");
     const clearRoomBtn = document.getElementById("clear-room-btn");
     const videoCallBtn = document.getElementById("video-call-btn");
@@ -1935,14 +1974,19 @@
     function renderSharedImages(list) {
       const images = Array.isArray(list) ? list : [];
       if (!images.length) {
-        sharedImageGrid.innerHTML = '<div class="empty">No shared images yet</div>';
+        sharedImageGrid.innerHTML = '<div class="empty">No shared notes or photos yet</div>';
         return;
       }
       sharedImageGrid.innerHTML = images.map((image) => {
-        const imageUrl = withTab(image.url || "");
+        const attachments = image.images || (image.url ? [image] : []);
+        const imageMarkup = attachments.map((attachment) => {
+          const imageUrl = escapeHtml(withTab(attachment.url));
+          return `<img src="${imageUrl}" alt="${escapeHtml(attachment.originalName || "Shared image")}" data-full-src="${imageUrl}" loading="lazy">`;
+        }).join("");
         return (
           `<div class="shared-image-card">
-            <img src="${imageUrl}" alt="${escapeHtml(image.originalName || "Shared image")}" data-full-src="${imageUrl}">
+            ${image.text ? `<p class="shared-note-text">${escapeHtml(image.text)}</p>` : ""}
+            ${imageMarkup}
             <div class="shared-image-meta">
               <strong>${escapeHtml(image.name || "Someone")}</strong>
               <span>${escapeHtml(formatTime(image.timestamp || Date.now()))}</span>
@@ -1961,47 +2005,79 @@
       });
     }
 
-    async function uploadSharedImage(file) {
-      if (!file) return;
-      if (!file.type.startsWith("image/")) {
-        alert("Please choose an image file.");
-        return;
-      }
+    function updateShareNoteButton() {
+      shareNoteBtn.disabled = sharingNote || (!sharedNoteText.value.trim() && !sharedNoteFiles.length);
+    }
 
+    function renderNotePreviews() {
+      sharedNotePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+      sharedNotePreviewUrls = sharedNoteFiles.map((file) => URL.createObjectURL(file));
+      sharedNotePreviews.replaceChildren();
+      sharedNoteFiles.forEach((file, index) => {
+        const preview = document.createElement("div");
+        preview.className = "shared-note-preview";
+        const image = document.createElement("img");
+        image.src = sharedNotePreviewUrls[index];
+        image.alt = file.name;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Remove";
+        remove.setAttribute("aria-label", `Remove ${file.name}`);
+        remove.disabled = sharingNote;
+        remove.addEventListener("click", () => {
+          sharedNoteFiles.splice(index, 1);
+          renderNotePreviews();
+        });
+        preview.append(image, remove);
+        sharedNotePreviews.append(preview);
+      });
+      updateShareNoteButton();
+    }
+
+    async function shareNote(event) {
+      event.preventDefault();
+      if (shareNoteBtn.disabled) return;
+      sharingNote = true;
+      sharedNoteText.disabled = true;
+      uploadSharedImageBtn.disabled = true;
+      shareNoteBtn.textContent = "Sharing…";
+      sharedNoteStatus.textContent = "Sharing your post…";
+      renderNotePreviews();
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("text", sharedNoteText.value.trim());
       formData.append("name", myName || nameInput.value.trim() || "Someone");
-
+      sharedNoteFiles.forEach((file) => formData.append("images", file));
       try {
-        const res = await fetch(withTab("/shared-image"), { method: "POST", body: formData, headers: authHeaders });
-        if (!res.ok) {
-          let message = "Upload failed";
-          try {
-            const data = await res.json();
-            message = data?.error || message;
-          } catch (_error) {}
-          throw new Error(message);
-        }
-      } catch (_error) {
-        alert(`Failed to upload image. ${_error.message || "Please try again."}`);
+        const res = await fetch(withTab("/shared-note"), { method: "POST", body: formData, headers: authHeaders });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Sharing failed");
+        sharedNoteText.value = "";
+        sharedNoteFiles = [];
+        sharedNoteStatus.textContent = "Shared with everyone.";
+      } catch (error) {
+        sharedNoteStatus.textContent = `Could not share: ${error.message || "Please try again."}`;
       } finally {
-        sharedImageInput.value = "";
+        sharingNote = false;
+        sharedNoteText.disabled = false;
+        uploadSharedImageBtn.disabled = false;
+        shareNoteBtn.textContent = "Share";
+        renderNotePreviews();
       }
     }
 
     async function deleteSharedImage(imageId) {
       const id = `${imageId || ""}`.trim();
       if (!id) return;
-      if (!window.confirm("Delete this image?")) return;
+      if (!window.confirm("Delete this shared post?")) return;
 
       try {
-        const res = await fetch(`/shared-image/${encodeURIComponent(id)}`, {
+        const res = await fetch(`/shared-note/${encodeURIComponent(id)}`, {
           method: "DELETE",
           headers: authHeaders,
         });
         if (!res.ok) throw new Error("Delete failed");
       } catch (_error) {
-        alert("Failed to delete image. Please try again.");
+        alert("Failed to delete post. Please try again.");
       }
     }
 
@@ -3032,8 +3108,27 @@
     });
     uploadSharedImageBtn.addEventListener("click", () => sharedImageInput.click());
     sharedImageInput.addEventListener("change", () => {
-      uploadSharedImage(sharedImageInput.files[0]);
+      const files = Array.from(sharedImageInput.files || []);
+      sharedImageInput.value = "";
+      if (sharingNote) return;
+      if (sharedNoteFiles.length + files.length > 10) {
+        sharedNoteStatus.textContent = "Choose up to 10 images per post.";
+        return;
+      }
+      if (files.some((file) => !file.type.startsWith("image/") && !/\.(gif|png|jpe?g|webp|heic|heif)$/i.test(file.name))) {
+        sharedNoteStatus.textContent = "Please choose image files.";
+        return;
+      }
+      if (files.some((file) => file.size > 50 * 1024 * 1024)) {
+        sharedNoteStatus.textContent = "Each image must be 50 MB or smaller.";
+        return;
+      }
+      sharedNoteStatus.textContent = "";
+      sharedNoteFiles.push(...files);
+      renderNotePreviews();
     });
+    sharedNoteText.addEventListener("input", updateShareNoteButton);
+    sharedNoteForm.addEventListener("submit", shareNote);
     openLoginHistoryBtn.addEventListener("click", async () => {
       await refreshLoginHistory();
       loginHistoryScreen.classList.add("active");

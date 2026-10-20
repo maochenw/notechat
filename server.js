@@ -170,6 +170,14 @@ const sharedImageUpload = multer({
   },
 });
 
+const sharedNoteUpload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024, files: 10, fields: 2, fieldSize: 40 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(isImageUpload(file) ? null : new Error("Only image files are allowed"), isImageUpload(file));
+  },
+});
+
 // Configure multer for sticker uploads
 const stickerStorage = multer.diskStorage({
   destination: STICKERS_DIR,
@@ -305,16 +313,46 @@ app.post("/shared-image", requireAccess, (req, res) => {
   });
 });
 
-app.delete("/shared-image/:id", requireAccess, (req, res) => {
+// Notes use the existing shared board and live update event, including legacy photos.
+app.post("/shared-note", requireAccess, (req, res) => {
+  sharedNoteUpload.array("images", 10)(req, res, (err) => {
+    const files = req.files || [];
+    const reject = (message) => {
+      files.forEach((file) => fs.unlink(file.path, () => {}));
+      return res.status(400).json({ error: message });
+    };
+    if (err) return reject(err.message || "Note upload failed");
+    const text = typeof req.body.text === "string" ? req.body.text.replace(/\r\n?/g, "\n").trim() : "";
+    if (text.length > 10000) return reject("Notes can contain up to 10,000 characters");
+    if (!text && !files.length) return reject("Add text or at least one image");
+
+    const note = {
+      id: crypto.randomUUID(),
+      text,
+      images: files.map((file) => ({
+        url: `/uploads/${file.filename}`,
+        originalName: file.originalname.slice(0, 120),
+      })),
+      name: `${req.body.name || "Someone"}`.trim().slice(0, 30) || "Someone",
+      timestamp: Date.now(),
+    };
+    sharedImages.unshift(note);
+    emitSharedImages();
+    return res.json({ note, images: sharedImages });
+  });
+});
+
+app.delete(["/shared-image/:id", "/shared-note/:id"], requireAccess, (req, res) => {
   const id = `${req.params.id || ""}`.trim();
   const idx = sharedImages.findIndex((image) => image.id === id);
   if (idx === -1) {
-    return res.status(404).json({ error: "Image not found" });
+    return res.status(404).json({ error: "Shared post not found" });
   }
 
   const [removedImage] = sharedImages.splice(idx, 1);
-  if (removedImage?.url) {
-    const filePath = path.join(UPLOADS_DIR, path.basename(removedImage.url));
+  const attachments = removedImage.images || (removedImage.url ? [removedImage] : []);
+  for (const image of attachments) {
+    const filePath = path.join(UPLOADS_DIR, path.basename(image.url));
     fs.unlink(filePath, () => {});
   }
   emitSharedImages();
@@ -1218,5 +1256,5 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${server.address().port}`);
 });
